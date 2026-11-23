@@ -658,6 +658,36 @@ module.exports = [
     expected: { ...upiJourney, paymentType: 'cards', provider: 'IRCTC eWallet' },
   }),
 
+  // The configured train is not in the results. The person picks a class and
+  // a date on the train that is, and presses Book Now, while the extension is
+  // still giving its own train time to show up in the list.
+  {
+    name: 'configured train not in the results, another train booked by hand meanwhile: no pop-up over the passenger page',
+    site: { loginCaptcha: ['R7KQ2M'], trains: [{ number: '99120', name: 'STANDIN MAIL', classes: ['SL', '3A'] }] },
+    settings: settings({ quotaType: 'GENERAL' }),
+    async drive(t) {
+      await cursorInCaptcha(t, 'login.captcha');
+      await typeAndEnter(t, 'R7KQ2M');
+      await t.until('the train list', (log) => views(log).includes('trains'), 45000);
+      await t.pause(1500); // the person reads the list first; the extension looks for its train for 5.5 s
+      for (const part of ['class[3A]', 'date[Fri, 07 Mar]', 'book']) {
+        await t.page.locator(`[data-rec="train[99120].${part}"]`).click();
+      }
+      await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
+    },
+    verify(t, log) {
+      t.same('Book Now pressed once, for the train, class and date the person chose',
+        submitted(log, 'book'), [{ train: '99120', travelClass: '3A', date: 'Fri, 07 Mar' }]);
+      t.same('the person typed the login captcha and booked that train; the extension clicked nothing in the train list',
+        [byThePerson(log), clicked(log, 'train[').length],
+        [['input login.captcha', 'click train[99120].class[3A]', 'click train[99120].date[Fri, 07 Mar]', 'click train[99120].book'], 3]);
+      const wait = elapsed(log, 'view passengers', 'click passenger[0].remove');
+      t.check(`the extension starts on the passenger page ${wait} ms after it appeared (it used to go on looking for its train for the rest of 5.5 s)`, wait < 2500);
+      t.same('the passenger form is continued once, for the two selected passengers',
+        submitted(log, 'passengers').map((form) => form.passengers.map((passenger) => passenger.name)), [['Asha Example', 'Ravi Example']]);
+    },
+  },
+
   {
     name: 'review page left with Back while the captcha is waited for: the note is taken away',
     site: twoCaptchas,

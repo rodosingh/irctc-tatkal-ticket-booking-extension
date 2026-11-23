@@ -273,8 +273,9 @@ Branches of the extension that no scenario takes:
 
 - `confirmberths` on, with or without a confirmed berth on offer. That is the
   only use of the `.AVAILABLE` status inside a date cell.
-- The configured train missing from the list, its class not offered, and a
-  first date cell that is not the journey date.
+- The configured train missing from the list with nobody booking another one
+  (the pop-up for it), its class not offered, and a first date cell that is
+  not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
 - An empty user id or password, and a mobile number that is not ten digits.
 - A single name picked from the saved passenger list, a name that list never
