@@ -15,7 +15,10 @@
     "version:sync": "node scripts/sync-version.js",
     "version:bump:patch": "npm version patch --no-git-tag-version && npm run version:sync",
     "version:bump:minor": "npm version minor --no-git-tag-version && npm run version:sync",
-    "version:bump:major": "npm version major --no-git-tag-version && npm run version:sync"
+    "version:bump:major": "npm version major --no-git-tag-version && npm run version:sync",
+    "test:e2e": "node test/e2e/run.js"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "playwright-core": "^1.65.1"
+  }
 }

@@ -1,0 +1,34 @@
+/* The custom tags are unknown elements, which are inline by default. */
+app-root, app-header, app-login, app-captcha, app-jp-input, app-train-list,
+app-train-avl-enq, app-passenger-input, app-passenger, app-review-booking,
+app-train-header, app-payment-options, app-ewallet-confirm, app-standin-done,
+p-dialog, p-panel, p-tabmenu {
+  display: block;
+}
+
+body { font: 14px/1.4 sans-serif; margin: 0; padding: 0 16px 40px; }
+.standin-note { background: #fff3cd; padding: 6px 10px; }
+
+app-header .h_head1 { display: flex; gap: 24px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ccc; }
+a { cursor: pointer; color: #0b5ed7; }
+
+p-dialog, app-login, app-ewallet-confirm { border: 2px solid #333; padding: 12px; margin: 12px 0; max-width: 420px; }
+app-jp-input, app-train-avl-enq, app-passenger, app-review-booking, app-payment-options { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+
+input, select, button { font: inherit; margin: 3px 6px 3px 0; }
+label { display: block; margin: 4px 0; }
+.error { color: #b00020; }
+.unpainted { display: none; }
+
+.ui-autocomplete-items, .ui-dropdown-items { list-style: none; margin: 0; padding: 0; border: 1px solid #999; max-width: 320px; }
+.ui-autocomplete-items li, .ui-dropdown-items li { padding: 4px 8px; cursor: pointer; }
+#journeyQuota > div { display: inline-block; min-width: 180px; border: 1px solid #999; padding: 4px 8px; cursor: pointer; }
+
+.cells { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.pre-avl { border: 1px solid #999; padding: 6px 10px; cursor: pointer; }
+p-tabmenu ul { display: flex; gap: 8px; list-style: none; padding: 0; }
+p-tabmenu li[aria-selected="true"] { font-weight: bold; }
+.disable-book { opacity: 0.4; }
+
+.bank-type, .bank-text { border: 1px solid #999; padding: 6px 10px; margin: 4px 0; max-width: 420px; cursor: pointer; }
+.selected { background: #d1e7dd; }
