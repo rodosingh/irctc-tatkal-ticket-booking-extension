@@ -42,6 +42,10 @@ const PAYMENT_OPTIONS_WAIT_TIME = 10000;
 const NO_FOOD_DIALOG_WAIT_TIME = 2000;
 // How long a name is retried against the IRCTC master list before giving up.
 const MASTER_PASSENGER_WAIT_TIME = 20000;
+// How long the train list gets to render its first row.
+const TRAIN_LIST_WAIT_TIME = 30000;
+// Once rows are showing, how long the wanted train gets to appear among them.
+const TRAIN_RESULTS_WAIT_TIME = 5000;
 
 const defaultSettings = {
   automationStatus: false,
@@ -693,10 +697,26 @@ async function selectQuota(element,value) {
   // Get all list items within the autocomplete dropdown
   var listItems = document.querySelectorAll(JOURNEY_QUOTA_LIST);
 
+  // Prefer the item that is exactly the wanted quota, then one that starts
+  // with it, ignoring case and extra spaces: TATKAL is also part of
+  // PREMIUM TATKAL.
+  const normalize = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+  const wanted = normalize(value || '');
+  const items = Array.from(listItems);
+  const preferred = items.find((item) => normalize(item.textContent) === wanted)
+    || items.find((item) => normalize(item.textContent).startsWith(wanted + ' '));
+  if (preferred) {
+    await humanClick(preferred);
+    return;
+  }
+
   // Loop through each list item
   for (let item of listItems) {
     // Get the text content of the list item
     const itemText = item.textContent.trim();
+
+    // PREMIUM TATKAL contains TATKAL: never fall back to it for plain TATKAL
+    if (itemText.toLowerCase().includes('premium') && !value.toLowerCase().includes('premium')) continue;
 
     // Check if the text content contains the name substring (case-insensitive)
     if (itemText.toLowerCase().includes(value.toLowerCase())) {
@@ -779,6 +799,16 @@ async function callSearchTrainComponent(){
 }
 async function findRootTrain() {
   await delay(500);
+  // The rows can render well after the list itself when the site is slow, so
+  // wait for the first train to show before looking for the wanted one, then
+  // keep looking for a while before deciding it is not listed.
+  const listed = await waitForCondition(() => document.querySelector(FIND_TRAIN_NUMBER), TRAIN_LIST_WAIT_TIME);
+  if (listed) {
+    await waitForCondition(() => {
+      const headings = Array.from(document.querySelectorAll(FIND_TRAIN_NUMBER));
+      return headings.some((heading) => textIncludes(heading.textContent, trainNumber));
+    }, TRAIN_RESULTS_WAIT_TIME);
+  }
   const trainHeadingElements = document.querySelectorAll(FIND_TRAIN_NUMBER);
 
   if (!trainHeadingElements || !trainHeadingElements.length) {
@@ -812,23 +842,29 @@ async function scrollToFoundTrainAndSelectClass() {
   const availableClasses = rootElement.querySelectorAll(AVAILABLE_CLASS);
   if (!availableClasses || !availableClasses.length) {
     Logger.warn('No available classes found.');
-    return;
+    return false;
   }
   await delay(500);
+  // Match the code in brackets, as in "Exec. Chair Car (EC)": the bare code EC
+  // is also part of "Second Sitting" and "AC 3 Economy".
+  const cells = Array.from(availableClasses).filter((cell) => cell.querySelector('strong'));
+  const textOf = (cell) => cell.querySelector('strong').textContent;
+  const code = accommodationClass.trim();
   let selectedClass = null;
-  for (let availableClass of availableClasses) {
-    const classNameElement = availableClass.querySelector('strong');
-    if (!classNameElement) continue;
-    const classText = classNameElement.textContent;
-    if (textIncludes(classText, accommodationClass)) {
-      selectedClass = availableClass;
-      break;
-    }
+  if (cells.some((cell) => /\(\w+\)/.test(textOf(cell)))) {
+    selectedClass = cells.find((cell) => textOf(cell).toUpperCase().includes(`(${code.toUpperCase()})`)) || null;
+  } else {
+    // Labels in some other format. Take one that has the code as a whole
+    // word; failing that, the old substring match, but only when it points
+    // at a single class, so that an ambiguous code is left to the user.
+    const wholeCode = new RegExp('\\b' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+    const loose = cells.filter((cell) => textIncludes(textOf(cell), code));
+    selectedClass = cells.find((cell) => wholeCode.test(textOf(cell))) || (loose.length === 1 ? loose[0] : null);
   }
 
   if (!selectedClass) {
     Logger.warn('No matching accommodation class found:', accommodationClass);
-    return;
+    return false;
   }
   
   await delay(200);
@@ -840,6 +876,7 @@ async function scrollToFoundTrainAndSelectClass() {
     ', and accommodation class:',
     accommodationClass
   );
+  return true;
 }
 // refresh the train by clicking selected open class tab
 async function refreshTrain() {
@@ -915,17 +952,31 @@ async function bookTicket() {
   await findRootTrain();
 
   // No train found;
-  if (trainFoundAtPosition === -1) return;
+  if (trainFoundAtPosition === -1) {
+    alert(`Train ${trainNumber} was not found in the search results. Check the train number, date and stations. The automation carries on if you book a train yourself.`);
+    return;
+  }
   let rootElement =
   document.querySelectorAll(TRAIN_COMPONENT)[trainFoundAtPosition];
   // Start observing mutations on the parent element
   observer.observe(rootElement, { childList: true, subtree: true });
   
-  await scrollToFoundTrainAndSelectClass();
+  const classSelected = await scrollToFoundTrainAndSelectClass();
+
+  // No class was clicked, so no availability will arrive by itself. Say so,
+  // and keep watching: if the user clicks a class on this train, the loop
+  // below carries on from there as it always has.
+  if (!classSelected) {
+    alert(`Class ${accommodationClass} was not found on train ${trainNumber}. Click the class you want on this train to carry on.`);
+  }
 
   await delay(1000);
 
   while (!isAvlEnquiryCompleted) {
+    // The user may have picked the class and pressed Book Now themselves:
+    // once the passenger page is showing there is nothing left to do here.
+    if (document.querySelector(PASSENGER_APP_COMPONENT)) return;
+
     // Check if any new mutations occurred since the last refresh
     if (mutationCompletionCounter > 0) {
         try {
