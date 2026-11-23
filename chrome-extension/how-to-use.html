@@ -130,103 +130,301 @@
     <div class="container mt-5">
         <h2 class="text-center large font-weight-bold" >How to Use the Tatkal Ticket Booking Extension</h2>
         <section class="step-section mt-5">
-            <h3>Fill all the form Login , Train and Payment Details</h3>
-            <hr>
-            <ol>
-                <li>Fill in your login details. They are saved, unencrypted, in this browser's extension storage on this device.</li>
-                <li>Enter the details of the trains you want to book Tatkal tickets for. You can use the
-                    <code>Go to IRCTC Website</code> button to find the required information and fill it in the form.
-                </li>
-                <li>For now we have provided default payment options via Paytm UPI, which is faster compared to other payment methods.
-                </li>
-                <li>If you want to see the final QR code page for payment, check the box labeled
-                    <code>Pay & Book (Show QR Code Page)</code>.
-                </li>
-                <li>
-                    <strong>Timer Details:</strong>
-                    <ol>
-                        <li><code>Tatkal Start Timer</code>:
-                            <ul>
-                                <li>If you select <code>AC class</code>, Tatkal start timer will be set for
-                                    <code>09:59:53</code>.
-                                </li>
-                                <li>If you select <code>Sleeper class</code>, Tatkal start timer will be set for
-                                    <code>10:59:53</code>.
-                                </li>
-                                <li>We recommend using the default timer settings.</li>
-                            </ul>
-                        </li>
-                        <li><code>Refresh Time (ms)</code>: Default is set to 5000 milliseconds (5 seconds). This will
-                            refresh the train availability status every 5 seconds on the IRCTC page.</li>
-                        <li><code>Login Minutes Before</code>: Default is set to 2 minutes. This will login at specified minutes before Tatkal start timer.</li>
-                    </ol>
-                </li>
-                <li >The <code>Tatkal Start Timer</code> will be used to transition from search
-                    train page to train
-                    list page
-                    and there we are going to refresh the selected train using refresh time here 5 seconds</li> 
-                <li>Once you've filled all the details, click on the <code>Save Settings</code> button.</li>
-            </ol>
-            <div class="info"><p>You can adjust both the start timer and refresh time according to your preferences and needs.</p></div>
+            <div class="warning"><p>This extension is unofficial and not connected with IRCTC. IRCTC's terms of
+                service restrict automated booking, and IRCTC can restrict an account. This version has been
+                checked only on a test copy of IRCTC's booking pages, not on the real site, so be ready to
+                finish any step by hand. It cannot promise a ticket.</p></div>
         </section>
 
         <section class="step-section">
-            <h3>Auto Booking Switch</h3>
+            <h3>Set up your booking</h3>
             <hr>
+            <p>Do this on the options page before booking day. In a wide window, work across the top row of
+                cards, then down; in a narrow one the cards stack, so go by their names.</p>
+            <p>A new install often shows a yellow line <code>Draft wake-up time has passed: ...</code> at the
+                top; filling in the dates changes it. The <strong>Go to IRCTC Website</strong> button there
+                only opens the site: nothing runs while <strong>Auto Booking</strong> is
+                <strong>OFF</strong>.</p>
             <ol>
-                <li>If the switch is turned on, the extension will run automatically whenever you visit the IRCTC
-                    website
-                    and attempt to book tickets using the provided settings and passenger details.</li>
-                <li>If the switch is turned off, the extension will not run on the IRCTC page.</li>
-                <li>If the switch is on and Tatkal start timer is set, the extension will automatically log at specified minutes(2 minutes by default)
-                    before the start timer, and the <code>Go to IRCTC Website</code> button will disappear.</li>
-                <li>If the switch is on and Tatkal start timer is set, and there is less than specified minutes available before
-                    the start timer, the <code>Book Ticket on IRCTC</code> button will appear, allowing you to book
-                    manually.</li>
+                <li><strong>Login Details.</strong> Type your IRCTC <strong>Username</strong> and
+                    <strong>Password</strong>. The password is kept unencrypted on this computer (see Privacy
+                    below); on a shared computer, leave it empty and sign in yourself on booking day. Or click
+                    <strong>Import from file</strong> and choose a plain text file like this:<br>
+                    <code>user-id: your-irctc-username<br>password: your-irctc-password<br>mobile: 9876543210</code><br>
+                    Only these three names are read; <code>mobile</code> fills <strong>Mobile Number</strong>
+                    further down. Delete the file afterwards: it is a second plain copy of your password.
+                </li>
+                <li><strong>Train Details.</strong> Fill in <strong>Date*</strong> (journey date, as
+                    day/month/year), <strong>Train Number</strong> (five digits), <strong>From</strong> and
+                    <strong>To</strong>, <strong>Quota Type</strong> and <strong>Accommodation Class</strong>.
+                    <strong>From</strong> and <strong>To</strong> take station codes, not names: the short code
+                    in capitals shown beside a station's name on tickets and in train enquiries, such as NDLS
+                    for New Delhi. Any letters are accepted and nothing checks them. For
+                    <strong>GENERAL</strong> journeys 60 or more days away, an
+                    <strong>Opening Day Booking</strong> switch appears under <strong>Quota Type</strong>:
+                    switching it on sets <strong>Booking Start Time</strong> to 07:59:53 and makes Search wait
+                    for that time.
+                </li>
+                <li><strong>Payment Details.</strong> Choose <strong>Payment Type</strong>; if a
+                    <strong>Payment Type Changed</strong> notice appears, click <strong>OK</strong>. The two
+                    greyed-out boxes show the one choice each type has: IRCTC's
+                    <code>BHIM/ UPI/ USSD</code> option with <code>PAYTM</code> for
+                    <strong>BHIM/UPI</strong>, your IRCTC eWallet for <strong>Wallets</strong>. The tick box
+                    reads <strong>Pay &amp; Book (Show QR Code Page)</strong> for BHIM/UPI and
+                    <strong>Pay &amp; Book (Direct Deduction)</strong> for Wallets.
+                    <ul>
+                        <li>Unticked: the run ends on IRCTC's payment page with your option selected, and
+                            paying is left to you.</li>
+                        <li>Ticked: the extension presses IRCTC's Pay &amp; Book button. With
+                            <strong>Wallets</strong> it then also presses CONFIRM on the eWallet page, so the
+                            wallet payment is confirmed without waiting for you, waiting list or not (see
+                            step 7). Leave the box unticked unless you accept that.</li>
+                    </ul>
+                </li>
+                <li><strong>Schedule &amp; Timing.</strong> Times are Indian Standard Time.
+                    <ul>
+                        <li><strong>Schedule Date</strong> is the day of the run. When you pick the journey
+                            date under a Tatkal quota (<strong>TATKAL</strong> or
+                            <strong>PREMIUM TATKAL</strong>), the page sets it to the day before.</li>
+                        <li><strong>Booking Start Time</strong> is when Search is pressed. For the Tatkal
+                            quotas the page sets it to 09:59:53, or 10:59:53 for classes SL, FC, 2S and VS: on
+                            purpose, a few seconds before the 10:00 and 11:00 openings these defaults assume.
+                            Change it, or the date, only if IRCTC's opening for your train is different.</li>
+                        <li><strong>Refresh Time (ms)</strong> is the pause between availability checks after
+                            Search: 5000 is five seconds.</li>
+                        <li><strong>Login Minutes Before</strong> (2 to begin with) is how long before
+                            <strong>Booking Start Time</strong> the extension opens IRCTC. This guide calls
+                            that moment the <strong>wake-up time</strong>. The page shows it as
+                            <code>Draft wake-up time</code>, then as <code>Automatic login starts at</code>
+                            and <code>Login starts in ...</code> once Auto Booking is on.</li>
+                        <li>For <strong>GENERAL</strong>, set <strong>Schedule Date</strong> and
+                            <strong>Booking Start Time</strong> yourself: unless
+                            <strong>Opening Day Booking</strong> is on, they only set the wake-up time, and
+                            Search is pressed as soon as the journey is filled in.</li>
+                    </ul>
+                </li>
+                <li><strong>Passenger Details.</strong> The <strong>Use IRCTC Master Data</strong> box, not the
+                    tab you are viewing, decides which list is used. Leave it unticked unless you have saved
+                    travellers in your IRCTC account (its master list).
+                    <ul>
+                        <li>Unticked: on <strong>Passenger List</strong>, click <strong>Add Passenger</strong>,
+                            fill in <strong>Name</strong> (16 characters at most), <strong>Age</strong> (click
+                            the empty cell), <strong>Gender</strong>, <strong>Preference</strong> and
+                            <strong>Food Choice</strong>, click the disk icon, then tick the row: saving does
+                            not tick it.</li>
+                        <li>Ticked: on <strong>Passenger Master Data</strong>, click
+                            <strong>Add Passenger</strong>, type the first name exactly as saved in your IRCTC
+                            master list, click the disk icon and tick the row.</li>
+                        <li>Only ticked rows are used: up to 4 for the Tatkal quotas, 6 for General.</li>
+                        <li>For a child under five without a berth, switch on
+                            <strong>Have Infant Without Berth?</strong> and click
+                            <strong>Add Infant Without Berth</strong>.</li>
+                    </ul>
+                </li>
+                <li><strong>Contact Details.</strong> Type a ten-digit <strong>Mobile Number</strong>, or leave
+                    it empty to use the one on your IRCTC account.</li>
+                <li><strong>Other Preferences.</strong> These are copied to IRCTC's passenger page.
+                    <ul>
+                        <li><strong>Consider for Auto Upgradation</strong> starts ticked.</li>
+                        <li><strong>Book only if confirmed berths are allotted</strong> starts unticked, and
+                            Book Now is then pressed even for a waiting list. Ticked, Book Now is not pressed
+                            while no confirmed seat shows, and a pop-up says so after every availability check
+                            until you click OK.</li>
+                        <li><strong>Travel Insurance (Incl. of GST)</strong> starts at
+                            <strong>Yes, and I accept the terms &amp; conditions</strong>; choose
+                            <strong>No, I don't want travel insurance</strong> otherwise.</li>
+                    </ul>
+                </li>
+                <li><strong>Popup Configurations.</strong>
+                    <ul>
+                        <li><strong>Preferred Website Language Popup</strong>: if IRCTC asks which language
+                            you want, the extension answers <strong>English</strong> or
+                            <strong>Hindi</strong> as chosen here.</li>
+                        <li><strong>Auto-Accept 'From/To Station' Confirmation Dialogs</strong> (starts
+                            unticked): IRCTC asks you to confirm when you search from a city's main code but
+                            the train leaves from another station in that city. Ticked, the extension answers
+                            Yes if the question is showing straight after Book Now; otherwise you answer
+                            it.</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Save Booking Details</strong>. A dialog says
+                    <code>Your booking details have been saved.</code> and the red
+                    <strong>Unsaved changes!</strong> goes away. If something is wrong, a dialog names the
+                    first problem instead: fix it and save again. Leave
+                    <strong>Advanced: DOM Selectors</strong>, at the bottom of the page, closed.</li>
+                <li>Click the <strong>Auto Booking</strong> switch. Check the summary under
+                    <strong>Start Auto Booking?</strong> (its <strong>Automation wake-up</strong> line is the
+                    wake-up time) and click <strong>Save &amp; Start Automation</strong>. The switch shows
+                    <strong>ON</strong> and the top bar counts down to the wake-up time.</li>
+            </ol>
+            <div class="warning"><p>While <strong>Auto Booking</strong> is <strong>ON</strong>, opening or
+                reloading any <code>www.irctc.co.in</code> page in this Chrome profile starts a run at once,
+                whatever the <strong>Schedule Date</strong>.</p></div>
+        </section>
+
+        <section class="step-section">
+            <h3>On booking day</h3>
+            <hr>
+            <p>These steps are what the extension is written to do. They have been checked on a test copy of
+                IRCTC's pages, not on the real site, so be ready to finish any step by hand.</p>
+            <p>Before the wake-up time, check that:</p>
+            <ul>
+                <li>Chrome is running and the computer will stay awake. <strong>Auto Booking</strong> stays
+                    <strong>ON</strong> when Chrome is closed and reopened, so there is nothing to switch on
+                    again.</li>
+                <li>The options page is open in a tab. Its <strong>Auto Booking</strong> switch is the only way
+                    to stop a run. To open the page again, click the extension's icon in the toolbar (it is
+                    under the puzzle-piece Extensions button until you pin it).</li>
+                <li>The top bar shows <strong>Auto Booking</strong> <strong>ON</strong> and a
+                    <code>Login starts in ...</code> countdown.</li>
+                <li>Your phone is at hand for an OTP or a UPI payment.</li>
+            </ul>
+            <p>Then:</p>
+            <ol>
+                <li><strong>IRCTC opens.</strong> At the wake-up time the IRCTC search page opens, with a
+                    notification <code>IRCTC automation started</code> (you may not see it if notifications
+                    are off for Chrome). If the wake-up time had passed when you switched on, click
+                    <strong>Book Ticket on IRCTC</strong> in the top bar instead.</li>
+                <li><strong>Sign-in.</strong> The extension fills in your username and password. If there is a
+                    captcha, a note at the top of the page says <code>Type the captcha and press Enter.</code>
+                    and the cursor is in the box. If IRCTC then shows a new captcha, the note says
+                    <code>A new captcha is shown. Type it and press Enter.</code> With no captcha, the extension
+                    signs in by itself.</li>
+                <li><strong>Search.</strong> It fills in the journey. For the Tatkal quotas it presses Search
+                    when the clock in the IRCTC page header reaches <strong>Booking Start Time</strong>. Until
+                    then the filled-in form just sits there; that is expected. Do not reload the tab
+                    meanwhile: that starts again from sign-in. For <strong>GENERAL</strong> it presses Search
+                    at once, unless <strong>Opening Day Booking</strong> is on.</li>
+                <li><strong>Train and passengers.</strong> It opens your class on your train, asks for
+                    availability again every <strong>Refresh Time (ms)</strong> until IRCTC enables Book Now,
+                    and presses it. If IRCTC then asks you to confirm the station, answer it yourself: the
+                    extension accepts it only when
+                    <strong>Auto-Accept 'From/To Station' Confirmation Dialogs</strong> is ticked, and it
+                    looks for the question once. It then fills in the passenger page and presses
+                    Continue.</li>
+                <li><strong>Review.</strong> If there is a captcha, the note shows the seat status copied from
+                    the page, for example:<br>
+                    <code>Current Seats Status: AVAILABLE-0042<br>Type the captcha and press Enter to continue to payment.</code><br>
+                    To go on, type the captcha and press Enter. To stop, switch <strong>Auto Booking</strong>
+                    off. With no captcha there is no note, and the extension goes on to payment after about
+                    three seconds.</li>
+                <li><strong>Payment.</strong> It selects your payment option. With
+                    <strong>Pay &amp; Book</strong> unticked it stops there, and you press IRCTC's Pay &amp;
+                    Book button. Ticked, it presses that button: with <strong>BHIM/UPI</strong>, paying is
+                    then yours to do; with <strong>Wallets</strong>, it also presses CONFIRM on the eWallet
+                    page without waiting for you. If the review page showed no captcha, the run can get this
+                    far without waiting for you at all after sign-in. Any OTP and checking the ticket are
+                    yours to do.</li>
+                <li><strong>Afterwards.</strong> Switch <strong>Auto Booking</strong> off. It never switches
+                    itself off.</li>
             </ol>
         </section>
 
         <section class="step-section">
-            <h3>How to Add Passengers for Tatkal Booking 🚆</h3>
+            <h3>Stopping or changing your mind</h3>
             <hr>
-            <h5>Adding a New Passenger</h5>
             <ul>
-                <li>Select the <strong>Passengers List Tab</strong></li>
-                <li>Click on <code>Add Passenger</code> and Fill in the <strong>Name, Age, Gender, and Seat Preference</strong>.</li>
-                <li>Click the <code>Save Icon</code> button to save them.</li>
-                <li>Now select the checkbox and the added passenger will be <strong>selected</strong> for booking.</li>
-                <li>If you don’t want to book for a passenger, simply <strong>uncheck or delete</strong> them.</li>
+                <li><strong>Stop a run:</strong> click the <strong>Auto Booking</strong> switch on the options
+                    page so it shows <strong>OFF</strong>. The IRCTC tab stops before its next click and the
+                    page stays as it is. There is no stop button on the IRCTC page.</li>
+                <li><strong>Stop and delete the saved details:</strong> click
+                    <strong>Clear Booking Details</strong>, then <strong>Confirm</strong>.</li>
+                <li><strong>Change details:</strong> edit them, click <strong>Save Booking Details</strong> and
+                    reload any open IRCTC tab.</li>
+                <li><strong>Run again in a stopped tab:</strong> switch <strong>Auto Booking</strong> on and
+                    reload that tab.</li>
             </ul>
-            
-            <h5>Using Master Data Passengers</h5>
-            <ul>
-                <li>Select the <strong>Passengers Master Data Tab</strong> option to use saved names.</li>
-                <li>Click on <code>Add Passenger</code> and enter the passenger's first name or the exact name as listed in IRCTC's master data.</li>
-                <li>You can add multiple passenger by following above step</li>
-                <li><strong>Example:</strong> If your IRCTC master data contains <code>Ajay Singh</code> and <code>Rahul Singh</code>,
-                    add <strong>Ajay</strong> and <strong>Rahul</strong> as separate entries.</li>
-            </ul>
-            <p><strong>Note:</strong> Master Data passengers are auto-filled during booking.</p>
-        
-            <div class="warning">
-                <p><strong>⚠ Important:</strong> You can either use <strong>Master Data</strong> OR <strong>New Passenger Data</strong>—not both at the same time.</p>
-            </div>
         </section>
-        
+
         <section class="step-section">
-            <h3>What to Do on the IRCTC Site While Booking? 🎟️</h3>
+            <h3>Messages you may see</h3>
+            <hr>
+            <h5>On the options page</h5>
+            <ul>
+                <li><code>Unsaved changes!</code> The form differs from what is saved. Click
+                    <strong>Save Booking Details</strong>.</li>
+                <li><code>Cannot Save Booking Details</code> or <code>Cannot Start Automation</code>, with a
+                    reason. One check failed, and only the first problem is shown. Correct the field the reason
+                    names and try again.</li>
+                <li><code>Schedule date cannot be in the past.</code> Click <strong>Today</strong> under
+                    <strong>Schedule Date</strong>, or pick the right day.</li>
+                <li><code>A passenger row is still being edited. Save or cancel that row first.</code> Click the
+                    disk icon or the X on that row.</li>
+                <li><code>At least one normal passenger is required. Infant-only bookings without berth are not allowed.</code>
+                    No row is ticked on <strong>Passenger List</strong>; saving a row with the disk icon does
+                    not tick it. Tick the box at the start of a passenger's row, or tick
+                    <strong>Use IRCTC Master Data</strong> if your names are on the other tab.</li>
+                <li><code>Draft wake-up time has passed: ...</code> <strong>Auto Booking</strong> is
+                    <strong>OFF</strong> and the wake-up time is behind you. A new install often shows this
+                    before anything is filled in, because <strong>Schedule Date</strong> starts as today.
+                    Carry on with the set-up: the journey date or <strong>Schedule Date</strong> moves it.
+                    Nothing starts while <strong>Auto Booking</strong> is <strong>OFF</strong>. To run now
+                    instead, switch <strong>Auto Booking</strong> on, then click
+                    <strong>Book Ticket on IRCTC</strong>.</li>
+                <li><code>Wake-up time passed: ...</code> <strong>Auto Booking</strong> is
+                    <strong>ON</strong> but the wake-up time is behind you, so nothing will open by itself.
+                    Change <strong>Schedule Date</strong> or <strong>Booking Start Time</strong> and save, or
+                    click <strong>Book Ticket on IRCTC</strong> to start now.</li>
+            </ul>
+            <h5>Notes on the IRCTC page</h5>
+            <ul>
+                <li><code>A new captcha is shown. Type it and press Enter.</code> Type the new one and press
+                    Enter. If Enter does nothing, click IRCTC's own button.</li>
+                <li><code>Current Seats Status: not found, check the page</code> Read the status on the page
+                    itself.</li>
+            </ul>
+            <h5>Pop-ups on the IRCTC page</h5>
+            <p>A pop-up holds that page until you click OK.</p>
+            <ul>
+                <li><code>Auto Booking was switched on again. Reload this IRCTC tab to run it here.</code> This
+                    IRCTC tab was open while <strong>Auto Booking</strong> was off, or its run was stopped.
+                    Click OK. Reload the tab only if you want a run to start in it now; otherwise close
+                    it.</li>
+                <li><code>Confirm Births Seat are not available.</code>
+                    <strong>Book only if confirmed berths are allotted</strong> is ticked and no confirmed seat
+                    shows for your date. Click OK to keep waiting. To end it, press Book Now yourself or switch
+                    <strong>Auto Booking</strong> off.</li>
+                <li><code>Train 12345 was not found in the search results. ...</code> Pick a train and class and
+                    press Book Now yourself, or correct the details, save and reload the tab.</li>
+                <li><code>Class 3A was not found on train 12345. ...</code> Click another class on that train.
+                    The extension carries on.</li>
+                <li><code>Passenger "Asha Example" was not found in your IRCTC master list. ...</code> Fill in
+                    that passenger row by hand. The extension then carries on.</li>
+                <li><code>Pay &amp; Book was not clicked: ...</code> Your saved payment option is not on IRCTC's
+                    page. Choose a payment option and pay yourself.</li>
+            </ul>
+        </section>
+
+        <section class="step-section">
+            <h3>If something does not work</h3>
             <hr>
             <ul>
-                <li><strong>Step 1:</strong> If the login form shows a captcha, the cursor is placed in its box. Type the captcha and <strong>press Enter</strong>.</li>
-                <li><strong>Step 2:</strong> On the <strong>Review & Captcha Page</strong>, a note at the top of the page shows the <strong>Current Seats Status</strong>. Check it first.</li>
-                <ul>
-                    <li>Decide whether to proceed with booking.</li>
-                    <li>If continuing, the cursor is already in the captcha box: type the captcha and <strong>press Enter</strong> to continue to payment.</li>
-                </ul>
+                <li><strong>Nothing happens on IRCTC.</strong> Check that <strong>Auto Booking</strong> shows
+                    <strong>ON</strong>, that no red <strong>Unsaved changes!</strong> is showing, and that the
+                    address starts with <code>https://www.irctc.co.in/</code> and has no <code>/eticket/</code>
+                    in it. Then reload the IRCTC tab: it reads your details only when the page loads.</li>
+                <li><strong>IRCTC did not open at the wake-up time.</strong> Chrome must be running then. To
+                    start the run, click <strong>Book Ticket on IRCTC</strong> in the options page's top
+                    bar.</li>
+                <li><strong>A step does not move on.</strong> The extension waits, with no time limit, for the
+                    next page it knows. Do the step by hand and it carries on from there.</li>
+                <li><strong>See what it is doing.</strong> Switch on <strong>Debug Mode</strong>, reload the
+                    IRCTC tab and open the browser console (F12, <strong>Console</strong>). Its lines start with
+                    <code>[IRCTC-Bot]</code>. They hide your password but show your username, mobile number and
+                    passenger names, so remove those before sharing a log.</li>
             </ul>
-            <p>✅ <strong>The script will handle the rest automatically!</strong> 🚀</p>
         </section>
-        
+
+        <section class="step-section">
+            <h3>Privacy</h3>
+            <hr>
+            <p>Your details, password included, are kept unencrypted in this browser's extension storage on
+                this device, so anyone who can use this browser profile can read them.</p>
+            <p>Nothing is sent to the developers. The details stay until you click
+                <strong>Clear Booking Details</strong> or remove the extension.</p>
+            <p>Chrome lists "Read your browsing history" for this extension. The extension uses that only to
+                find an IRCTC tab that is already open at the wake-up time.</p>
+        </section>
 
     </div>
 
