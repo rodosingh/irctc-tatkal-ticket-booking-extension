@@ -159,7 +159,7 @@ const signedIn = (t) => t.until('the extension to reach the journey form', (log)
 // `answerTime` Enter is pressed a second time before the answer comes.
 function booking(name, { site, overrides, expected, typedOnReview }) {
   const s = settings(overrides);
-  const timed = s.quotaType !== 'GENERAL';
+  const timed = ['TATKAL', 'PREMIUM TATKAL'].includes(s.quotaType) || (s.quotaType === 'GENERAL' && s.isOpeningDayBooking);
   const travellers = s.passengerList.filter((passenger) => passenger.isSelected);
   const wallet = s.paymentMethod === 'E-Wallet';
   const reviewTyped = typedOnReview || (site.reviewCaptcha ? [site.reviewCaptcha[0]] : []);
