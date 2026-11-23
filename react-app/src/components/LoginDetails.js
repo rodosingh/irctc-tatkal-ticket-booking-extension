@@ -1,13 +1,40 @@
 import React, { useState } from 'react';
-import { TextField, Box, Typography, InputAdornment, IconButton, FormControl, InputLabel, OutlinedInput } from '@mui/material';
+import { TextField, Box, Typography, InputAdornment, IconButton, FormControl, InputLabel, OutlinedInput, Button, FormHelperText } from '@mui/material';
 import { sharedStyles } from '../styles'; // Import the shared styles
 import { useAppContext } from '../contexts/AppContext';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { parseDetailsFile } from '../utils';
+
+const IMPORTED_FIELD_LABELS = {
+  username: 'username',
+  password: 'password',
+  mobileNumber: 'mobile number',
+};
 
 function LoginDetails() {
-  const { formData, handleChange } = useAppContext();
+  const { formData, handleChange, setFormData } = useAppContext();
   const [showPassword, setShowPassword] = useState(false);
-  
+  const [importMessage, setImportMessage] = useState('');
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files[0];
+    // Clear the picker so choosing the same file again still triggers onChange.
+    event.target.value = '';
+    if (!file) return;
+
+    const { values, ignored } = parseDetailsFile(await file.text());
+    const filled = Object.keys(values).map((field) => IMPORTED_FIELD_LABELS[field]);
+    const ignoredNote = ignored.length ? ` Ignored: ${ignored.join(', ')}.` : '';
+
+    if (filled.length === 0) {
+      setImportMessage(`${file.name} has no user-id, password or mobile line.${ignoredNote}`);
+      return;
+    }
+
+    setFormData((prevState) => ({ ...prevState, ...values }));
+    setImportMessage(`Filled ${filled.join(', ')} from ${file.name}. Press Save Booking Details to keep them.${ignoredNote}`);
+  };
+
   const handleClickShowPassword = () => setShowPassword((show) => !show);
   const handleMouseDownPassword = (event) => {
     event.preventDefault();
@@ -67,6 +94,13 @@ function LoginDetails() {
           label="Password"
         />
       </FormControl>
+      <Button component="label" variant="outlined" size="small" sx={{ mt: 1 }}>
+        Import from file
+        <input type="file" hidden onChange={handleImportFile} />
+      </Button>
+      <FormHelperText>
+        {importMessage || 'Fills username, password and mobile number from a text file with lines like "user-id: yourname". See .env.example.'}
+      </FormHelperText>
     </Box>)
   );
 }

@@ -281,3 +281,38 @@ export const validateBookingForm = (formData, { forAutomation = false } = {}) =>
 export function getTimeFromString(timeString, scheduleDate = getTodayDateString()) {
   return getScheduledDateTime(scheduleDate, timeString);
 }
+
+// Names recognised in a details file (see .env.example) and the setting each fills.
+const DETAILS_FILE_FIELDS = {
+  'user-id': 'username',
+  password: 'password',
+  mobile: 'mobileNumber',
+};
+
+// IRCTC takes the bare 10-digit number: drop punctuation and a +91 or 0 prefix.
+const toTenDigitMobile = (value) =>
+  value.replace(/\D/g, '').replace(/^(?:91|0)(?=\d{10}$)/, '');
+
+// Reads "name: value" (or "name=value") lines. Returns the settings to fill and
+// the names it did not recognise, so the caller can report both.
+export const parseDetailsFile = (text) => {
+  const values = {};
+  const ignored = [];
+
+  for (const line of text.split(/\r?\n/)) {
+    // Split on the first separator only, so a password may contain ":" or "=".
+    const match = line.match(/^\s*([^:=#\s][^:=]*?)\s*[:=]\s*(.*?)\s*$/);
+    if (!match || !match[2]) continue;
+
+    const name = match[1].toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(DETAILS_FILE_FIELDS, name)) {
+      ignored.push(match[1]);
+      continue;
+    }
+
+    const field = DETAILS_FILE_FIELDS[name];
+    values[field] = field === 'mobileNumber' ? toTenDigitMobile(match[2]) : match[2];
+  }
+
+  return { values, ignored };
+};
