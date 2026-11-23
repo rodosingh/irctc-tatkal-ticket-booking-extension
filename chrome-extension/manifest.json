@@ -3,7 +3,7 @@
   "version": "6.3.4",
   "manifest_version": 3,
   "minimum_chrome_version": "120",
-  "description": "Enhance your Tatkal booking speed with fast, automated clicks to secure confirmed tickets effortlessly.",
+  "description": "Fills in the IRCTC booking pages from details you save beforehand. You type each captcha. Unofficial, and no ticket is guaranteed.",
   "background": {
     "service_worker": "sw.js"
   },
