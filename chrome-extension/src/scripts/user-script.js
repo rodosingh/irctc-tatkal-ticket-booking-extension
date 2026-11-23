@@ -40,6 +40,8 @@ const CAPTCHA_WAIT_TIME = 3000;
 const PAYMENT_OPTIONS_WAIT_TIME = 10000;
 // IRCTC opens its No Food confirmation straight after the checkbox is ticked.
 const NO_FOOD_DIALOG_WAIT_TIME = 2000;
+// How long a name is retried against the IRCTC master list before giving up.
+const MASTER_PASSENGER_WAIT_TIME = 20000;
 
 const defaultSettings = {
   automationStatus: false,
@@ -1001,9 +1003,39 @@ async function selectAutocompleteOption(index=0,name = passengerNames) {
   // Find the autocomplete input element
   var autocompleteInput = row.querySelector(PASSENGER_NAME_INPUT);
   var ageInput = row.querySelector(PASSENGER_AGE_INPUT);
-  name = name.trim().toLowerCase();
+  const savedName = name.trim();
+  name = savedName.toLowerCase();
+  const startTime = Date.now();
   // Wait until the age input field is not empty
   while (ageInput && ageInput.value === '') {
+    // No suggestion matched in time. Stop retyping the name, which would fight
+    // the user, say so, and wait for them to fill this row; the run then
+    // carries on with the next passenger.
+    if (Date.now() - startTime >= MASTER_PASSENGER_WAIT_TIME) {
+      alert(
+        'Passenger "' + savedName + '" was not found in your IRCTC master list.' +
+        '\nChoose passenger ' + (index + 1) + ' yourself. The automation carries on once that row is filled.'
+      );
+      // Filled means an age and a gender that have stopped changing, so that
+      // a row being completed by hand is not cut short part-way. The row is
+      // looked up again each time, because the user may remove or replace it.
+      const filledState = () => {
+        const currentRow = document.querySelectorAll(PASSENGER_COMPONENT)[index];
+        if (!currentRow) return 'gone';
+        const age = currentRow.querySelector(PASSENGER_AGE_INPUT);
+        const gender = currentRow.querySelector(PASSENGER_GENDER_INPUT);
+        if (!age || age.value === '' || (gender && gender.value === '')) return null;
+        return age.value + '|' + (gender ? gender.value : '');
+      };
+      let settledState = null;
+      for (;;) {
+        const state = filledState();
+        if (state === 'gone' || (state !== null && state === settledState)) break;
+        settledState = state;
+        await delay(1500);
+      }
+      break;
+    }
       // Focus on the autocomplete input to trigger the generation of options
     autocompleteInput.focus();
 
@@ -1164,6 +1196,9 @@ async function addCustomPassengerList() {
       await delay(100);
     }
   }
+}
+async function addInfantPassengers() {
+  const infantPassengers = showInfant ? (infantList || []).filter(p => p.isSelected) : [];
 
   // Iterate over infant passengers
   Logger.info(`Starting infant passenger loop. Count: ${infantPassengers.length}`);
@@ -1314,6 +1349,8 @@ async function addPassengerInputAndContinue() {
   else{
     await addCustomPassengerList();
   }
+  // Infants are added the same way for both lists
+  await addInfantPassengers();
   await addMobileNumber();
   
   await selectPreferences();
@@ -1441,6 +1478,8 @@ async function handleCaptchaAndContinue() {
   }
 }
 async function selectPaymentMethod() {
+  // An empty saved value would match every tile
+  if (!paymentMethod) return false;
   // The tiles mount a moment after app-payment-options itself, so querying
   // straight away used to run against an empty list and select nothing (#94).
   await waitForElementToAppear(PAYMENT_METHOD, PAYMENT_OPTIONS_WAIT_TIME);
@@ -1458,14 +1497,17 @@ async function selectPaymentMethod() {
         // Click on the element
         await humanClick(element);
         Logger.info('Clicked on :', paymentMethod);
-        return; // Exit the loop after clicking the element
+        return true; // Exit the loop after clicking the element
       }
     }
   } else {
     Logger.info('No elements found with the specified classes.');
   }
+  return false;
 }
 async function selectPaymentProvider() {
+  // An empty saved value would match every tile
+  if (!paymentProvider) return false;
   // The provider list only renders after a payment method has been picked.
   await waitForElementToAppear(PAYMENT_PROVIDER, PAYMENT_OPTIONS_WAIT_TIME);
 
@@ -1482,11 +1524,12 @@ async function selectPaymentProvider() {
         // Simulate a click on the element
         await humanClick(element);
         Logger.info('Selected text:', element.textContent);
-        return; // Exit the loop after selecting the text
+        return true; // Exit the loop after selecting the text
       }
     }
   }
   Logger.info("No text found containing",paymentProvider);
+  return false;
 }
 async function clickPayButton() {
   // Find the button with the class "btn-primary" and "ng-star-inserted"
@@ -1497,9 +1540,11 @@ async function clickPayButton() {
     // Simulate a click on the button
     await humanClick(button);
     Logger.info('Clicked on button:', button.textContent);
+    return true;
   } else {
     Logger.info("No button found containing 'Pay'.");
   }
+  return false;
 }
 
 // Function to click the confirm button in the eWallet component
@@ -1704,14 +1749,28 @@ async function executeFunctions() {
     await waitForElementToAppear(PAYMENT_COMPONENT);
 
     // Payment Selection <Page 4>
-    await selectPaymentMethod();
-    await selectPaymentProvider();
+    const methodSelected = await selectPaymentMethod();
+    // With Pay & Book on, a missed method already hands the page to the
+    // user, so no provider is looked for under whatever else is open.
+    const providerSelected = (methodSelected || !autoPay) && await selectPaymentProvider();
 
     if (autoPay) {
-      await clickPayButton();
+      // Never press Pay & Book on an option other than the saved one: tell
+      // the user what was missing and leave the payment page to them.
+      if (!providerSelected) {
+        const notFound = methodSelected
+          ? 'payment provider "' + paymentProvider + '"'
+          : 'payment method "' + paymentMethod + '"';
+        alert(
+          'Pay & Book was not clicked: ' + notFound + ' not found on the payment page.' +
+          '\nPlease choose the payment option and pay yourself.'
+        );
+        return;
+      }
+      const payClicked = await clickPayButton();
 
       // Payment Confirmation for Ewallet <Page 5>
-      if (paymentMethod === EWALLET_IRCTC_DEFAULT) {
+      if (payClicked && paymentMethod === EWALLET_IRCTC_DEFAULT) {
         await waitForElementToAppear(EWALLET_COMPONENT);
         await clickEwalletConfirmButton();
       }
