@@ -22,17 +22,28 @@ function LoginDetails() {
     event.target.value = '';
     if (!file) return;
 
-    const { values, ignored } = parseDetailsFile(await file.text());
+    let text;
+    try {
+      text = await file.text();
+    } catch (error) {
+      setImportMessage(`Could not read ${file.name}.`);
+      return;
+    }
+
+    const { values, invalidMobile, skippedLines } = parseDetailsFile(text);
     const filled = Object.keys(values).map((field) => IMPORTED_FIELD_LABELS[field]);
-    const ignoredNote = ignored.length ? ` Ignored: ${ignored.join(', ')}.` : '';
+    const notes = [
+      invalidMobile ? ' The mobile line was not used because it is not a 10-digit number.' : '',
+      skippedLines ? ` ${skippedLines} other ${skippedLines === 1 ? 'line was' : 'lines were'} not recognised.` : '',
+    ].join('');
 
     if (filled.length === 0) {
-      setImportMessage(`${file.name} has no user-id, password or mobile line.${ignoredNote}`);
+      setImportMessage(`Nothing was filled from ${file.name}: it has no usable user-id, password or mobile line.${notes}`);
       return;
     }
 
     setFormData((prevState) => ({ ...prevState, ...values }));
-    setImportMessage(`Filled ${filled.join(', ')} from ${file.name}. Press Save Booking Details to keep them.${ignoredNote}`);
+    setImportMessage(`Filled ${filled.join(', ')} from ${file.name}. Press Save Booking Details to keep them.${notes}`);
   };
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);
