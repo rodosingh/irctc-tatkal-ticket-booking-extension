@@ -289,30 +289,44 @@ const DETAILS_FILE_FIELDS = {
   mobile: 'mobileNumber',
 };
 
-// IRCTC takes the bare 10-digit number: drop punctuation and a +91 or 0 prefix.
+// IRCTC takes the bare 10-digit number: drop punctuation and a +91, 0091 or 0 prefix.
 const toTenDigitMobile = (value) =>
-  value.replace(/\D/g, '').replace(/^(?:91|0)(?=\d{10}$)/, '');
+  value.replace(/\D/g, '').replace(/^(?:(?:00)?91|0)(?=\d{10}$)/, '');
 
-// Reads "name: value" (or "name=value") lines. Returns the settings to fill and
-// the names it did not recognise, so the caller can report both.
+// Reads "name: value" (or "name=value") lines. Returns the settings to fill,
+// whether a mobile line was there but unusable, and how many other lines were
+// not used. Those are counted rather than named, so that a stray line of a
+// credentials file is never echoed back on screen.
 export const parseDetailsFile = (text) => {
   const values = {};
-  const ignored = [];
+  let invalidMobile = false;
+  let skippedLines = 0;
 
   for (const line of text.split(/\r?\n/)) {
-    // Split on the first separator only, so a password may contain ":" or "=".
-    const match = line.match(/^\s*([^:=#\s][^:=]*?)\s*[:=]\s*(.*?)\s*$/);
-    if (!match || !match[2]) continue;
+    if (/^\s*(#|$)/.test(line)) continue;
 
-    const name = match[1].toLowerCase();
+    // Split on the first separator only, so a password may contain ":" or "=".
+    const match = line.match(/^\s*([^:=\s][^:=]*?)\s*[:=]\s*(.*?)\s*$/);
+    const name = match ? match[1].toLowerCase() : '';
     if (!Object.prototype.hasOwnProperty.call(DETAILS_FILE_FIELDS, name)) {
-      ignored.push(match[1]);
+      skippedLines++;
       continue;
     }
 
+    // Quotes around a value are optional, as in a .env file.
+    const value = match[2].replace(/^(["'])(.*)\1$/, '$2');
+    if (!value) continue;
+
     const field = DETAILS_FILE_FIELDS[name];
-    values[field] = field === 'mobileNumber' ? toTenDigitMobile(match[2]) : match[2];
+    if (field !== 'mobileNumber') {
+      values[field] = value;
+    } else if (/^\d{10}$/.test(toTenDigitMobile(value))) {
+      values[field] = toTenDigitMobile(value);
+    } else {
+      // Leave the saved number alone rather than replace it with one IRCTC rejects.
+      invalidMobile = true;
+    }
   }
 
-  return { values, ignored };
+  return { values, invalidMobile, skippedLines };
 };
