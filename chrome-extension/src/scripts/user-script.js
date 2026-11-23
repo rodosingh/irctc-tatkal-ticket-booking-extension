@@ -36,6 +36,8 @@ const STORAGE_KEY = 'tatkalTicketBookingFormData';
 
 // How long a page gets to render its captcha before it is treated as captcha-less.
 const CAPTCHA_WAIT_TIME = 3000;
+// The note shown while the person types a captcha into the page.
+const CAPTCHA_NOTE_ID = 'tatkal-captcha-note';
 // The payment page mounts its tiles a moment after the component itself.
 const PAYMENT_OPTIONS_WAIT_TIME = 10000;
 // IRCTC opens its No Food confirmation straight after the checkbox is ticked.
@@ -297,6 +299,8 @@ let stopped = false;
 // True from the moment Auto Booking is seen switched off until it is seen on again.
 let switchedOff = false;
 const STOPPED = new Error('Auto Booking was switched off. Reload the page to run it again.');
+// Set while a captcha is waited for in the page: takes that step off the page.
+let stopCaptchaEntry = null;
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && changes[STORAGE_KEY]) {
@@ -307,6 +311,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       username = '';
       password = '';
       mobileNumber = '';
+      if (stopCaptchaEntry) stopCaptchaEntry();
     } else if (switchedOff) {
       // Switched back on: this tab does not pick that up by itself.
       switchedOff = false;
@@ -420,6 +425,107 @@ async function waitForUsableCaptcha(getImage, getInput, timeoutMs = CAPTCHA_WAIT
     const input = getInput();
     return image && isElementVisible(input) ? { image, input } : null;
   }, timeoutMs);
+}
+
+// Manual captcha entry: the person types into the page's own captcha box and
+// presses Enter. Nothing here reads the image. Returns at once and takes itself
+// off the page when isOver() says the step has finished, or when the run is
+// stopped. The note reads `note` for the first captcha and `retryNote` for a
+// later one, after the line that getStatus() gives, if there is one.
+function startCaptchaEntry({ getImage, getInput, submit, isOver, note, retryNote, getStatus }) {
+  const noteElement = document.createElement('div');
+  noteElement.id = CAPTCHA_NOTE_ID;
+  noteElement.setAttribute('role', 'status');
+  // Top centre, clear of the captcha box, which is scrolled to the middle.
+  Object.assign(noteElement.style, {
+    position: 'fixed',
+    top: '8px',
+    left: '0',
+    right: '0',
+    margin: '0 auto',
+    width: 'fit-content',
+    zIndex: '2147483647',
+    maxWidth: '90vw',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    background: '#1f2d3d',
+    color: '#fff',
+    font: 'bold 15px/1.4 Arial, sans-serif',
+    textAlign: 'center',
+    whiteSpace: 'pre-line',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+    pointerEvents: 'none',
+  });
+  document.body.appendChild(noteElement);
+
+  let shown = {}; // the captcha last seen: its image, the image's src and its box
+  let captchas = 0; // how many the page has drawn during this step
+  let sent = false; // Enter has sent what is in the box
+  let enterIsDown = false;
+
+  const onKeyDown = (event) => {
+    if (event.key !== 'Enter' || event.target !== getInput() || !event.target.value.trim()) return;
+    // The capture phase on document comes before any handler of the page, so
+    // the page's own Enter handling and this one cannot both submit.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    enterIsDown = true;
+    // One captcha is sent once, however long the site takes to answer. Enter
+    // works again when the page shows a new captcha or a new box.
+    if (sent) return;
+    sent = true;
+    Logger.info('Captcha typed in the page. Submitting.');
+    submit().catch(ignoreStop);
+  };
+  // A page may submit on keyup instead, so the rest of that press is kept from it too.
+  const onKeyUp = (event) => {
+    if (event.key !== 'Enter' || !enterIsDown) return;
+    enterIsDown = false;
+    event.stopImmediatePropagation();
+  };
+
+  const stop = () => {
+    stopCaptchaEntry = null;
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
+    observer.disconnect();
+    noteElement.remove();
+    Logger.info('Captcha step is over.');
+  };
+
+  // Runs on every change to the page. Ends the step, or follows the captcha when
+  // the page draws a new one. The page may re-create the image and the box, so
+  // they are looked up each time and never kept.
+  const followCaptcha = () => {
+    if (isOver()) {
+      stop();
+      return;
+    }
+
+    const image = getImage();
+    const input = getInput();
+    const redrawn = image && (image !== shown.image || image.src !== shown.src);
+    // Not between two captchas, and not the captcha and box already seen
+    if (image && (redrawn || input !== shown.input) && isElementVisible(input)) {
+      shown = { image, src: image.src, input };
+      sent = false;
+      if (redrawn) captchas += 1;
+      input.scrollIntoView({ behavior: 'instant', block: 'center' });
+      input.focus();
+    }
+
+    // Built again on every change, as the status may be shown late or change
+    const text = (getStatus ? getStatus() : '') + (captchas > 1 ? retryNote : note);
+    if (noteElement.textContent !== text) noteElement.textContent = text;
+  };
+
+  Logger.info('Waiting for the captcha to be typed in the page.');
+  const observer = new MutationObserver(followCaptcha);
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['src'] });
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('keyup', onKeyUp, true);
+  stopCaptchaEntry = stop;
+  followCaptcha();
 }
 
 // Function to convert month abbreviation to number
@@ -585,6 +691,19 @@ async function clickLoginSubmit(loginModal) {
 }
 
 async function fillLoginCaptcha(loginModal, { image: captchaImage, input: captchaInput }) {
+  if (!autoSolveCaptcha) {
+    // The person types the captcha into the page and presses Enter
+    startCaptchaEntry({
+      getImage: () => document.querySelector(LOGIN_CAPTCHA_IMAGE),
+      getInput: () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT),
+      submit: () => clickLoginSubmit(loginModal),
+      isOver: () => !document.contains(loginModal),
+      note: 'Type the captcha and press Enter.',
+      retryNote: 'A new captcha is shown. Type it and press Enter.',
+    });
+    return;
+  }
+
   // Scroll the captcha input field into view smoothly
   await scrollToElement(captchaInput);
 
@@ -600,14 +719,6 @@ async function fillLoginCaptcha(loginModal, { image: captchaImage, input: captch
     await delay(50);
     if (autoSubmitCaptcha) {
       await clickLoginSubmit(loginModal);
-    }
-  } else {
-    // Prompt user with the extracted text (allowing edits)
-    let userInput = prompt("Please enter the Captcha:");
-    if (userInput) {
-        await simulateTyping(captchaInput, userInput);
-        await delay(50);
-        await clickLoginSubmit(loginModal);
     }
   }
 }
@@ -1531,6 +1642,25 @@ async function handleCaptchaAndContinue() {
     return;
   }
 
+  if (!autoSolveCaptcha) {
+    // The person checks the seat status, types the captcha into the page and
+    // presses Enter
+    startCaptchaEntry({
+      getImage: () => document.querySelector(REVIEW_CAPTCHA_IMAGE),
+      getInput: () => document.getElementById(REVIEW_CAPTCHA_INPUT),
+      submit: clickReviewContinue,
+      isOver: () => document.querySelector(PAYMENT_COMPONENT) || !document.querySelector(REVIEW_COMPONENT),
+      getStatus: () => {
+        const trainHeader = document.querySelector(REVIEW_TRAIN_HEADER);
+        const seats = trainHeader?.querySelector(REVIEW_AVAILABLE) || trainHeader?.querySelector(REVIEW_WAITING);
+        return 'Current Seats Status: ' + (seats?.textContent.trim() || 'not found, check the page') + '\n';
+      },
+      note: 'Type the captcha and press Enter to continue to payment.',
+      retryNote: 'A new captcha is shown. Type it and press Enter to continue to payment.',
+    });
+    return;
+  }
+
   const captchaImage = captcha.image;
   const captchaInput = captcha.input;
 
@@ -1551,23 +1681,6 @@ async function handleCaptchaAndContinue() {
 
     // Check if autoSubmitCaptcha is enabled
     if (autoSubmitCaptcha) {
-      await clickReviewContinue();
-    }
-  } else {
-    // Prompt the user to enter the captcha value
-    var trainHeader = document.querySelector(REVIEW_TRAIN_HEADER);
-    var available = trainHeader.querySelector(REVIEW_AVAILABLE);
-    var waitingList = trainHeader.querySelector(REVIEW_WAITING);
-    var seatsAvailable = (available || waitingList)?.textContent;
-
-    var captchaValue = prompt(
-      'Current Seats Status: ' + seatsAvailable + '\nPlease enter the Captcha:'
-    );
-
-    // Fill the captcha input field with the provided value
-    if (captchaValue) {
-      await simulateTyping(captchaInput, captchaValue);
-      await delay(50);
       await clickReviewContinue();
     }
   }
@@ -1817,7 +1930,7 @@ async function executeFunctions() {
     // Dismiss any initial popups (like language selection)
     await dismissLanguagePopup();
 
-    // login page < Page 0 > (a prompt will appear to fill captcha)
+    // login page < Page 0 > (the captcha, if there is one, is typed in the page)
     await login();
     await waitForAppLoginToDisappear();
     await callSearchTrainComponent();
@@ -1842,7 +1955,7 @@ async function executeFunctions() {
     // Wait for the ticket review and Captcha page load
     await waitForElementToAppear(REVIEW_COMPONENT);
 
-    // Review and Captcha <Page 3>   (a prompt will appear to fill captcha)
+    // Review and Captcha <Page 3>   (the captcha, if there is one, is typed in the page)
     await handleCaptchaAndContinue();
 
     // Wait for the app-payment-options element to appear on the page after the transition

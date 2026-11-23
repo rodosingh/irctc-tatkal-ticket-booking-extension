@@ -2,8 +2,9 @@
 
 // Stand-in for the booking site, used only by test/e2e. It is derived from the
 // selectors and texts in chrome-extension/src/scripts/user-script.js: every
-// element below exists because that script looks for it. What this assumes
-// about the real pages is listed in ../README.md.
+// element below exists because that script looks for it, apart from two
+// controls for the person (another captcha, Back on the review page). What
+// this assumes about the real pages is listed in ../README.md.
 
 (function () {
   // ---- per-scenario configuration: ?standin=<JSON> ----
@@ -15,6 +16,16 @@
     reviewCaptcha: [], // the same three for the review page
     reviewCaptchaUnpainted: false,
     reviewRejects: 0,
+    // How the next captcha is drawn: 'replace' re-creates the image and the
+    // box together; 'src' changes the image where it is, takes the cursor out
+    // of the box and a moment later puts an empty box in its place; 'box'
+    // keeps a refused captcha and only puts an empty box in its place; 'none'
+    // leaves a refused captcha as it is.
+    captchaRedraw: 'replace',
+    pageEnterKey: null, // 'keydown' or 'keyup': forms with a captcha submit on Enter with a handler of their own
+    answerTime: 500, // ms that sign-in, the review step and Pay take to be answered
+    seatsAfter: 0, // ms after the review page appears that its seat status is shown; 0 = with the page
+    seatsWhenRefused: null, // the waiting-list status the review page shows once a captcha was refused
     clock: null, // 'HH:MM:SS' the header clock starts at; null = this machine's time
     trains: [
       { number: '99120', name: 'STANDIN MAIL', classes: ['SL', '3A'] },
@@ -50,7 +61,7 @@
   const later = (fn) => setTimeout(fn, 150);
   // Sign-in, the review step and Pay take as long as a slow request would, and
   // their buttons stay on the page meanwhile, so a second press gets recorded.
-  const answered = (fn) => setTimeout(fn, 500);
+  const answered = (fn) => setTimeout(fn, cfg.answerTime);
   const two = (n) => String(n).padStart(2, '0');
 
   function h(tag, attrs, ...children) {
@@ -66,7 +77,10 @@
   // ---- the page clock ----
   let clockOffset = 0;
   let shownClock = '';
-  const clockEl = h('strong');
+  // The clock and the seat status change where they are, as a bound text
+  // does: no node is added or removed.
+  const clockText = document.createTextNode('');
+  const clockEl = h('strong', null, clockText);
   function setClock(hhmmss) {
     const [hours, minutes, seconds] = hhmmss.split(':').map(Number);
     clockOffset = new Date().setHours(hours, minutes, seconds, 0) - Date.now();
@@ -75,7 +89,7 @@
   function tick() {
     const now = new Date(Date.now() + clockOffset);
     shownClock = `${two(now.getHours())}:${two(now.getMinutes())}:${two(now.getSeconds())}`;
-    clockEl.textContent = `${two(now.getDate())}-${MONTHS[now.getMonth()]}-${now.getFullYear()} [${shownClock}]`;
+    clockText.data = `${two(now.getDate())}-${MONTHS[now.getMonth()]}-${now.getFullYear()} [${shownClock}]`;
   }
 
   // ---- the record of what was done to the page ----
@@ -125,6 +139,10 @@
     known.set(el, el.value);
     record('change', keyOf(el), { value: el.value, by: by(event) });
   }, true);
+  // Where the cursor is matters for a captcha box only.
+  document.addEventListener('focus', (event) => {
+    if (event.target.matches('app-captcha #captcha')) record('focus', keyOf(event.target));
+  }, true);
 
   // ---- shared pieces ----
   const root = document.querySelector('app-root');
@@ -158,29 +176,64 @@
       + `<text x="14" y="34" font-family="monospace" font-size="26" letter-spacing="6">${text}</text></svg>`;
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   }
-  // A captcha box and its checking. Every refusal shows the next text.
+  // A captcha box and its checking. Each new captcha shows the next text.
   function captchaStep(rec, texts, unpainted, rejects) {
-    let attempt = 0;
+    let attempts = 0;
+    let drawn = 0;
     const slot = h('div');
-    const shown = () => (texts.length ? texts[Math.min(attempt, texts.length - 1)] : null);
+    const shown = () => (texts.length ? texts[Math.min(drawn, texts.length - 1)] : null);
+    const box = () => slot.querySelector('#captcha');
+    // A box that is shown must be filled in: while it is empty the browser
+    // does not send the form.
+    const emptyBox = () => h('input', {
+      id: 'captcha', formcontrolname: 'captcha', autocomplete: 'off', required: texts.length > 0, 'data-rec': rec,
+    });
     const render = () => {
       slot.replaceChildren();
       if (!texts.length && !unpainted) return;
+      // The site's own control for another captcha. The extension never looks for it.
+      const another = h('a', { 'data-rec': `${rec}.another` }, 'Another captcha');
+      another.addEventListener('click', () => next(cfg.captchaRedraw === 'src' ? 'src' : 'replace'));
       slot.append(h('app-captcha', { class: texts.length ? null : 'unpainted' },
-        h('img', { class: 'captcha-img', alt: 'captcha', src: captchaImage(shown() || 'UNSEEN') }),
-        h('input', { id: 'captcha', formcontrolname: 'captcha', autocomplete: 'off', 'data-rec': rec })));
+        h('img', { class: 'captcha-img', alt: 'captcha', src: captchaImage(shown() || 'UNSEEN') }), emptyBox(), another));
+      if (texts.length) record('shown', rec);
+    };
+    const next = (how) => {
+      if (how === 'none') return;
+      if (how === 'box') return box().replaceWith(emptyBox());
+      drawn += 1;
+      if (how === 'replace') return render();
+      slot.querySelector('img').src = captchaImage(shown());
+      box().blur();
+      later(() => {
+        box().replaceWith(emptyBox());
+        record('shown', rec);
+      });
     };
     render();
     return {
       slot,
-      render,
-      typed: () => valueOf(slot.querySelector('#captcha')),
+      refused: () => next(cfg.captchaRedraw),
+      typed: () => valueOf(box()),
       passes() {
-        const ok = attempt >= rejects && (shown() === null || this.typed() === shown());
-        attempt += 1;
+        const ok = attempts >= rejects && (shown() === null || this.typed() === shown());
+        attempts += 1;
         return ok;
       },
     };
+  }
+  // A page may submit on Enter with a handler of its own, in place of the
+  // browser's submission: on keydown, or on keyup.
+  function ownEnterHandling(form) {
+    if (!cfg.pageEnterKey) return;
+    form.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      if (cfg.pageEnterKey === 'keydown') form.requestSubmit();
+    });
+    form.addEventListener('keyup', (event) => {
+      if (event.key === 'Enter' && cfg.pageEnterKey === 'keyup') form.requestSubmit();
+    });
   }
 
   // ---- header, language dialog, sign-in ----
@@ -210,6 +263,7 @@
       h('button', { type: 'submit', 'data-rec': 'login.submit' }, 'SIGN IN'));
     const modal = h('app-login', null, h('h3', null, 'Sign in'), form);
 
+    ownEnterHandling(form);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const data = { userid: valueOf(userid), password: valueOf(password), captcha: captcha.typed() };
@@ -221,7 +275,7 @@
           loginLink.replaceWith(h('span', null, `Welcome ${data.userid}`));
         } else {
           error.textContent = 'Sign in was refused. Enter the details shown and try again.';
-          captcha.render();
+          captcha.refused();
         }
       });
     });
@@ -428,8 +482,12 @@
   function showReview() {
     const captcha = captchaStep('review.captcha', cfg.reviewCaptcha, cfg.reviewCaptchaUnpainted, cfg.reviewRejects);
     const error = h('p', { class: 'error' });
+    // For the person who decides not to go on. The extension never looks for it.
+    const back = h('button', { type: 'button', 'data-rec': 'review.back' }, 'Back');
+    back.addEventListener('click', () => later(showPassengers));
     const form = h('form', null, captcha.slot, error,
-      h('button', { type: 'submit', class: 'btnDefault train_Search', 'data-rec': 'review.continue' }, 'Continue'));
+      h('button', { type: 'submit', class: 'btnDefault train_Search', 'data-rec': 'review.continue' }, 'Continue'), back);
+    ownEnterHandling(form);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const data = { captcha: captcha.typed() };
@@ -438,11 +496,23 @@
       answered(() => {
         if (accepted) return showPayment();
         error.textContent = 'That was refused. Enter the text shown and try again.';
-        captcha.render();
+        if (cfg.seatsWhenRefused) showSeats('WL', cfg.seatsWhenRefused);
+        captcha.refused();
       });
     });
+    const seatsText = document.createTextNode('');
+    const seats = h('span', null, seatsText);
+    const showSeats = (kind, text) => {
+      seats.className = kind;
+      seatsText.data = text;
+      record('shown', 'review.seats', { value: text });
+    };
+    // The summary is tall enough to leave the captcha below the fold.
     show('review', h('app-review-booking', null,
-      h('app-train-header', null, h('span', null, 'Seats: '), h('span', { class: 'AVAILABLE' }, SEATS)), form));
+      h('app-train-header', null, h('span', null, 'Seats: '), seats),
+      h('div', { class: 'summary' }, 'Journey and fare summary'), form));
+    if (cfg.seatsAfter) setTimeout(showSeats, cfg.seatsAfter, 'AVAILABLE', SEATS);
+    else showSeats('AVAILABLE', SEATS);
   }
 
   // ---- payment ----
