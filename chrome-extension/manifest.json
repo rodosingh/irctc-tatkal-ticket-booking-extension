@@ -1,6 +1,6 @@
 {
   "name": "Tatkal Ticket Booking",
-  "version": "6.3.4",
+  "version": "6.3.5",
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "description": "Fills in the IRCTC booking pages from details you save beforehand. You type each captcha. Unofficial, and no ticket is guaranteed.",
