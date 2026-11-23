@@ -6,9 +6,10 @@ a local stand-in for the booking site, lets the extension walk its flow there
 
 The stand-in is not the real site and was not copied from it. It was written
 from `chrome-extension/src/scripts/user-script.js`: every element exists
-because that script looks for it. A green run therefore proves the extension
-against the assumptions listed at the end of this file, not against the real
-pages.
+because that script looks for it, apart from two controls for the person
+(another captcha, and Back on the review page). A green run therefore proves
+the extension against the assumptions listed at the end of this file, not
+against the real pages.
 
 ## It never touches the real site
 
@@ -46,10 +47,23 @@ gets out.
 ## Captchas
 
 A captcha in the stand-in is a plain image with visible letters and a text
-box. The scenario says which text the image shows and what the person types;
-the runner types it by answering the `prompt()` the extension raises (through
-Playwright's `dialog` event), or by typing into the page. Nothing here reads
-the image, and `autoSolveCaptcha` is off in every scenario.
+box. The scenario says which text the image shows and what the person types.
+The test types it with real key presses, without clicking or focusing the box
+first, so the letters only arrive if the extension has put the cursor there;
+Enter is a real key press too. Nothing here reads the image, and the runner
+fails any of these scenarios in which something other than the person put text
+in a captcha box.
+
+While the person types, the extension shows a note with the id
+`tatkal-captcha-note`. The scenarios read its text, check that it is in view
+and not over the captcha, and check that it is gone when the step is over.
+
+`autoSolveCaptcha` is on in one scenario, only to show that those two branches
+of the extension still behave as they did. The reader they call has no service
+it can reach from the test browser, so it returns nothing; its two attempts to
+reach one are the only `outsideRequests` any scenario names. The extension
+does not place the cursor on that path, so there the test clicks the box
+first, as the person would.
 
 ## Running
 
@@ -68,8 +82,8 @@ E2E_LOG=1 npm run test:e2e             # also print what the stand-in recorded
 Exit code 0: all scenarios passed. 1: a scenario failed. 2: could not run:
 no `dist/`, a `dist/` older than the sources it is built from, or isolation
 not verified. A failing scenario prints the stand-in's record, the dialogs
-seen and the last lines the extension logged. A full run takes a little under
-two minutes; nearly all of it is the extension's own fixed waits.
+seen and the last lines the extension logged. A full run takes a little over
+three minutes; nearly all of it is the extension's own fixed waits.
 
 ## Files
 
@@ -81,7 +95,10 @@ two minutes; nearly all of it is the extension's own fixed waits.
 The stand-in records each click, each typed or chosen value and each form
 submission, in order, with the time since load and the page clock. `by` says
 whether an event came from a script (`click()`, `dispatchEvent()`: the
-extension) or from real input (the test acting as the person). A scenario
+extension) or from real input (the test acting as the person, or the browser
+submitting a form for them on Enter). It also records each captcha it draws
+and each seat status it shows on the review page (`shown`), and each time a
+captcha box gets the cursor (`focus`). A scenario
 configures it through the `?standin=<JSON>` query; the options are listed at
 the top of `site/standin.js`.
 
@@ -94,8 +111,9 @@ Add an object to the array in `scenarios.js`:
   name: 'what it shows',
   site: { loginCaptcha: ['R7KQ2M'] },        // stand-in options
   settings: settings({ autoPay: true }),      // stored for the extension; overrides the defaults
-  answers: ['R7KQ2M'],                        // typed into each prompt(), in order
-  async drive(t) {                            // wait for the extension, or act as the person
+  async drive(t) {                            // act as the person, and wait for the extension
+    await cursorInCaptcha(t, 'login.captcha');
+    await typeAndEnter(t, 'R7KQ2M');
     await t.until('the sign-in', (log) => of(log, 'submit', 'login').length > 0);
   },
   verify(t, log) {                            // runs even if drive() gave up
@@ -105,15 +123,19 @@ Add an object to the array in `scenarios.js`:
 ```
 
 `t` has `until(what, (log) => done, timeoutMs)`, `pause(ms)`, `readLog()`,
-`setClock('HH:MM:SS')`, `page` (Playwright's, for acting as the person),
-`dialogs`, `check(name, ok, detail)` and `same(name, actual, expected)`. Run
+`setClock('HH:MM:SS')`, `switchOff()` (stores the settings again with Auto
+Booking off, as the options page does), `page` (Playwright's, for acting as
+the person), `dialogs` (any prompt or alert that came up; none is expected),
+`check(name, ok, detail)` and `same(name, actual, expected)`. Run
 with `E2E_LOG=1` to see the keys the stand-in records. Each scenario gets a
 fresh browser profile. `booking(...)` builds a whole-flow scenario whose
 checks follow from its settings.
 
 A scenario whose page is expected to attempt a request to another host lists
 it under `outsideRequests`, as `'POST https://host/path'`. Any other attempt
-fails the scenario. The runner checks this after `verify`.
+fails the scenario. So does a prompt or an alert, and so does text put in a
+captcha box by anything but the person, unless the scenario turns
+`autoSolveCaptcha` on. The runner checks these three after `verify`.
 
 If the extension starts looking for something new, add it to
 `site/standin.js` from the selector in `user-script.js`, give it a `data-rec`
@@ -130,9 +152,11 @@ General
   or `change` event (selects) fired on that field, bubbling or not, as with a
   framework-bound form. Checkboxes and radios are read from their state.
 - The result of a click shows up 150 ms later (500 ms for sign-in, review
-  Continue and Pay), except where the extension reads it sooner (below). The
-  real site is slower and less regular; the extension's fixed waits are proven
-  only against these delays.
+  Continue and Pay, or `answerTime`), except where the extension reads it
+  sooner (below). The real site is slower and less regular; the extension's
+  fixed waits are proven only against these delays.
+- The clock and the seat status on the review page change their text where it
+  is, as a bound text does: no element is added or removed.
 - Forms accept whatever was filled in. Only captchas are checked.
 
 Home page and sign-in
@@ -149,6 +173,21 @@ Home page and sign-in
   in the same tick as its form, here and on the review page.
 - A sign-in that succeeds removes `app-login`. One that is refused keeps it
   and shows a new captcha in an empty box.
+- Sign-in and the review step are forms with a submit button, so Enter in the
+  captcha box sends the form through the browser. With `pageEnterKey` the
+  page uses a handler of its own on the form in place of that, on `keydown`
+  or on `keyup`.
+- A captcha box that is shown is `required`: while it is empty the browser
+  does not send the form, whoever presses the button, and puts the cursor in
+  the box.
+- A new captcha re-creates the image and the box together
+  (`captchaRedraw: 'replace'`, the default). With `'src'` the image's `src`
+  changes where it is, the cursor leaves the box, and a moment later an empty
+  box takes the old one's place. With `'box'` a refused captcha stays and
+  only its box is replaced by an empty one. With `'none'` a refused captcha
+  stays as it was.
+- Next to the captcha is a link that draws another one. The extension does
+  not look for it; it stands for the site's own control.
 - The journey form `app-jp-input` is on the home page before and after
   sign-in: `#origin input`, `#destination input`, `#jDate input`,
   `#journeyQuota > div` and `button[type="submit"].search_btn`.
@@ -201,8 +240,12 @@ Passenger page
 Review and payment
 
 - `app-review-booking` holds `app-train-header` with a `.AVAILABLE` element
-  whose text is the seat status, the captcha (as on sign-in) when there is
-  one, and Continue as `button.btnDefault.train_Search`.
+  whose text is the seat status, there with the page or `seatsAfter` ms
+  later. With `seatsWhenRefused` a refused captcha turns it into a `.WL`
+  element with that text. Below it are a summary tall enough to leave what follows
+  below the fold, the captcha (as on sign-in) when there is one, Continue as
+  `button.btnDefault.train_Search`, and a Back button that returns to the
+  passenger page (the extension does not look for it).
 - `app-payment-options` gets its method tiles `#pay-type .bank-type` a moment
   after it appears. Providers `#bank-type .bank-text` are listed only after a
   method is picked. Tile and provider texts contain what the options page
@@ -221,8 +264,6 @@ expiry, a slow or failing network, and anything after the Pay button.
 
 Selectors of the extension that nothing in the stand-in matches:
 
-- `.WL` in `app-train-header`, the waiting-list form of the seat status on
-  the review page.
 - `#bank-type .pay_tax_text`, the second form of a payment provider.
 - `input#origin`, `input#destination` and `input#jDate`. The stand-in has the
   `#origin input` form of each.
@@ -238,14 +279,14 @@ Branches of the extension that no scenario takes:
 - A single name picked from the saved passenger list, and a name that list
   never offers.
 - A payment method or provider that is not on the payment page.
-- Auto Booking switched off, or the saved details cleared, while the
-  extension is at work in a tab.
-- `autoSolveCaptcha` on, with or without `autoSubmitCaptcha`.
+- Auto Booking switched off anywhere but at the login captcha, and the saved
+  details cleared at any point.
+- `autoSolveCaptcha` on without `autoSubmitCaptcha`.
 - A language other than English. The stand-in's other button reads `Hindi`,
   where the options page stores `हिंदी`.
-- A review captcha that is refused, or present but not rendered. The stand-in
-  options `reviewRejects` and `reviewCaptchaUnpainted` are used by no
-  scenario.
+- A review captcha that is present but not rendered, or refused although it
+  was typed right. The stand-in options `reviewCaptchaUnpainted` and
+  `reviewRejects` are used by no scenario.
 - The service worker's alarm and notification, and the options page beyond
   the defaults it stores on first run.
 

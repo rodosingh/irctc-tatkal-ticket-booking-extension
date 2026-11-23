@@ -181,7 +181,8 @@ async function verifyIsolation(server) {
   return failures.length === 0;
 }
 
-// Stores the scenario's settings the way the options page would have.
+// Stores the scenario's settings the way the options page would have. Gives
+// the address of that page.
 async function seedSettings(context, settings) {
   const worker = context.serviceWorkers()[0] || (await context.waitForEvent('serviceworker', { timeout: 20000 }));
   const optionsUrl = `chrome-extension://${new URL(worker.url()).host}/options.html`;
@@ -196,6 +197,7 @@ async function seedSettings(context, settings) {
   // debugMode makes the content script log its steps, shown when a scenario fails.
   await options.evaluate((data) => chrome.storage.local.set(data), { [STORAGE_KEY]: settings, debugMode: true });
   await options.close();
+  return optionsUrl;
 }
 
 const describe = (entry) => {
@@ -210,16 +212,14 @@ async function runScenario(scenario, server) {
 
   try {
     await withBrowser(server.port, async (context) => {
-      await seedSettings(context, scenario.settings);
+      const optionsUrl = await seedSettings(context, scenario.settings);
       const page = await context.newPage();
 
-      // The test stands in for the person: it answers each prompt the
-      // extension raises with the next answer the scenario lists.
-      const answers = [...(scenario.answers || [])];
+      // No scenario expects a prompt or an alert. One that comes up is
+      // recorded, which fails the scenario below, and dismissed.
       page.on('dialog', async (dialog) => {
-        const answer = dialog.type() === 'prompt' && answers.length ? answers.shift() : null;
-        t.dialogs.push({ type: dialog.type(), message: dialog.message(), answer });
-        await (answer === null ? dialog.dismiss() : dialog.accept(answer));
+        t.dialogs.push({ type: dialog.type(), message: dialog.message() });
+        await dialog.dismiss();
       });
       page.on('console', (message) => {
         if (message.text().startsWith('[IRCTC-Bot]')) extensionLog.push(message.text());
@@ -245,6 +245,15 @@ async function runScenario(scenario, server) {
           readLog,
           pause: (ms) => page.waitForTimeout(ms),
           setClock: (time) => page.evaluate((value) => window.__standin.setClock(value), time),
+          // What the options page does when Auto Booking is switched off
+          // there: it stores the saved details again with the switch off.
+          switchOff: async () => {
+            const options = await context.newPage();
+            await options.goto(optionsUrl);
+            await options.evaluate((data) => chrome.storage.local.set(data),
+              { [STORAGE_KEY]: { ...scenario.settings, automationStatus: false } });
+            await options.close();
+          },
           until: (what, reached, timeoutMs = 30000) => poll(what, async () => reached(await readLog()), timeoutMs),
         });
       } finally {
@@ -259,7 +268,12 @@ async function runScenario(scenario, server) {
 
   // Checked even after a failed drive: it shows how far the extension got.
   scenario.verify(t, log);
+  t.same('no prompt and no alert', t.dialogs, []);
   t.same('no request was attempted outside the stand-in, apart from those the scenario names', t.outside, scenario.outsideRequests || []);
+  if (!scenario.settings.autoSolveCaptcha) {
+    t.same('nothing but the person put text in a captcha box',
+      log.filter((entry) => entry.type === 'input' && /\.captcha$/.test(entry.key) && entry.by !== 'user').map((entry) => entry.key), []);
+  }
 
   if (t.failures.length || process.env.E2E_LOG) {
     console.log('  what the stand-in recorded:');
