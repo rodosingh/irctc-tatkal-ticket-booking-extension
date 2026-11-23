@@ -159,7 +159,7 @@ const signedIn = (t) => t.until('the extension to reach the journey form', (log)
 // `answerTime` Enter is pressed a second time before the answer comes.
 function booking(name, { site, overrides, expected, typedOnReview }) {
   const s = settings(overrides);
-  const timed = s.quotaType !== 'GENERAL';
+  const timed = ['TATKAL', 'PREMIUM TATKAL'].includes(s.quotaType) || (s.quotaType === 'GENERAL' && s.isOpeningDayBooking);
   const travellers = s.passengerList.filter((passenger) => passenger.isSelected);
   const wallet = s.paymentMethod === 'E-Wallet';
   const reviewTyped = typedOnReview || (site.reviewCaptcha ? [site.reviewCaptcha[0]] : []);
@@ -566,6 +566,54 @@ module.exports = [
     },
   },
 
+  // The second name is not in the site's list. The extension gives it twenty
+  // seconds, says so in a pop-up and waits for that row to be filled in. The
+  // person takes the row off the page instead.
+  {
+    name: 'saved passenger list, a name it never offers and that row removed by hand: the names after it are still picked',
+    site: {
+      loginCaptcha: ['R7KQ2M'],
+      savedPassengers: [
+        { name: 'Asha Example', age: 34, gender: 'F' },
+        { name: 'Ravi Example', age: 61, gender: 'M' },
+      ],
+    },
+    settings: settings({
+      quotaType: 'GENERAL',
+      masterData: true,
+      passengerNames: [
+        { id: 1, name: 'Ravi Example', isSelected: true },
+        { id: 2, name: 'Nobody Example', isSelected: true },
+        { id: 3, name: 'Asha Example', isSelected: true },
+      ],
+    }),
+    // The one pop-up this run is expected to raise.
+    dialogs: [{
+      type: 'alert',
+      message: 'Passenger "Nobody Example" was not found in your IRCTC master list.'
+        + '\nChoose passenger 2 yourself. The automation carries on once that row is filled.',
+    }],
+    async drive(t) {
+      await cursorInCaptcha(t, 'login.captcha');
+      await typeAndEnter(t, 'R7KQ2M');
+      await t.until('the pop-up about the name that is not offered', () => t.dialogs.length > 0, 60000);
+      await t.page.locator('app-passenger').nth(1).locator('a.fa-remove').click();
+      await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
+    },
+    verify(t, log) {
+      t.same('the two names the list offers are picked, each in a row of its own',
+        clicked(log, 'passenger[').filter((key) => key.includes('.option[')),
+        ['passenger[0].name.option[Ravi Example]', 'passenger[1].name.option[Asha Example]']);
+      t.same('the form is continued once, with those two rows',
+        submitted(log, 'passengers').map((form) => form.passengers), [[
+          { name: 'Ravi Example', age: '61', gender: 'M', berth: '', food: '' },
+          { name: 'Asha Example', age: '34', gender: 'F', berth: '', food: '' },
+        ]]);
+      t.same('the person typed the login captcha, removed that row and did nothing else',
+        byThePerson(log), ['input login.captcha', 'click passenger[1].remove']);
+    },
+  },
+
   // Every answer takes four seconds here, and on the review page Enter is
   // pressed again while Continue is still awaited.
   booking('whole flow to the payment page, review captcha typed then Enter twice, autoPay off: one Continue, Pay is not pressed', {
@@ -609,6 +657,36 @@ module.exports = [
     },
     expected: { ...upiJourney, paymentType: 'cards', provider: 'IRCTC eWallet' },
   }),
+
+  // The configured train is not in the results. The person picks a class and
+  // a date on the train that is, and presses Book Now, while the extension is
+  // still giving its own train time to show up in the list.
+  {
+    name: 'configured train not in the results, another train booked by hand meanwhile: no pop-up over the passenger page',
+    site: { loginCaptcha: ['R7KQ2M'], trains: [{ number: '99120', name: 'STANDIN MAIL', classes: ['SL', '3A'] }] },
+    settings: settings({ quotaType: 'GENERAL' }),
+    async drive(t) {
+      await cursorInCaptcha(t, 'login.captcha');
+      await typeAndEnter(t, 'R7KQ2M');
+      await t.until('the train list', (log) => views(log).includes('trains'), 45000);
+      await t.pause(1500); // the person reads the list first; the extension looks for its train for 5.5 s
+      for (const part of ['class[3A]', 'date[Fri, 07 Mar]', 'book']) {
+        await t.page.locator(`[data-rec="train[99120].${part}"]`).click();
+      }
+      await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
+    },
+    verify(t, log) {
+      t.same('Book Now pressed once, for the train, class and date the person chose',
+        submitted(log, 'book'), [{ train: '99120', travelClass: '3A', date: 'Fri, 07 Mar' }]);
+      t.same('the person typed the login captcha and booked that train; the extension clicked nothing in the train list',
+        [byThePerson(log), clicked(log, 'train[').length],
+        [['input login.captcha', 'click train[99120].class[3A]', 'click train[99120].date[Fri, 07 Mar]', 'click train[99120].book'], 3]);
+      const wait = elapsed(log, 'view passengers', 'click passenger[0].remove');
+      t.check(`the extension starts on the passenger page ${wait} ms after it appeared (it used to go on looking for its train for the rest of 5.5 s)`, wait < 2500);
+      t.same('the passenger form is continued once, for the two selected passengers',
+        submitted(log, 'passengers').map((form) => form.passengers.map((passenger) => passenger.name)), [['Asha Example', 'Ravi Example']]);
+    },
+  },
 
   {
     name: 'review page left with Back while the captcha is waited for: the note is taken away',

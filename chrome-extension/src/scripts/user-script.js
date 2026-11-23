@@ -954,12 +954,15 @@ async function findRootTrain() {
   await delay(500);
   // The rows can render well after the list itself when the site is slow, so
   // wait for the first train to show before looking for the wanted one, then
-  // keep looking for a while before deciding it is not listed.
-  const listed = await waitForCondition(() => document.querySelector(FIND_TRAIN_NUMBER), TRAIN_LIST_WAIT_TIME);
+  // keep looking for a while before deciding it is not listed. Both waits
+  // end at once when the passenger page is showing: the person has booked a
+  // train themselves and there is no list left to look in.
+  const bookedByHand = () => document.querySelector(PASSENGER_APP_COMPONENT);
+  const listed = await waitForCondition(() => document.querySelector(FIND_TRAIN_NUMBER) || bookedByHand(), TRAIN_LIST_WAIT_TIME);
   if (listed) {
     await waitForCondition(() => {
       const headings = Array.from(document.querySelectorAll(FIND_TRAIN_NUMBER));
-      return headings.some((heading) => textIncludes(heading.textContent, trainNumber));
+      return headings.some((heading) => textIncludes(heading.textContent, trainNumber)) || bookedByHand();
     }, TRAIN_RESULTS_WAIT_TIME);
   }
   const trainHeadingElements = document.querySelectorAll(FIND_TRAIN_NUMBER);
@@ -1107,6 +1110,8 @@ async function bookTicket() {
 
   // No train found;
   if (trainFoundAtPosition === -1) {
+    // Nothing to say if the person has booked another train meanwhile.
+    if (document.querySelector(PASSENGER_APP_COMPONENT)) return;
     alert(`Train ${trainNumber} was not found in the search results. Check the train number, date and stations. The automation carries on if you book a train yourself.`);
     return;
   }
@@ -1288,9 +1293,19 @@ async function addMasterPassengerList() {
     const firstRow = document.querySelector(PASSENGER_REMOVE_ROW);
     await humanClick(firstRow);
     for (let index = 0; index < copyPassengerNames.length; index++) {
+      const rowsBefore = Array.from(document.querySelectorAll(PASSENGER_COMPONENT));
       await addNextRow();
       await delay(200);
-      await selectAutocompleteOption(index, copyPassengerNames[index]);
+      // Fill the row just added, which is the last one. The loop index is not
+      // its position once the person has removed a row. If the last row was
+      // there before, the page added none and that row is another passenger's.
+      const rows = document.querySelectorAll(PASSENGER_COMPONENT);
+      const lastRow = rows[rows.length - 1];
+      if (!lastRow || rowsBefore.includes(lastRow)) {
+        alert(`No passenger row could be added for "${copyPassengerNames[index]}". The automation stops here. Add the remaining passengers and finish the booking yourself.`);
+        throw new Error('No row was added for passenger "' + copyPassengerNames[index] + '".');
+      }
+      await selectAutocompleteOption(rows.length - 1, copyPassengerNames[index]);
     }
   }
 }

@@ -215,8 +215,8 @@ async function runScenario(scenario, server) {
       const optionsUrl = await seedSettings(context, scenario.settings);
       const page = await context.newPage();
 
-      // No scenario expects a prompt or an alert. One that comes up is
-      // recorded, which fails the scenario below, and dismissed.
+      // A prompt or an alert that comes up is recorded and dismissed. It
+      // fails the scenario below unless the scenario names it.
       page.on('dialog', async (dialog) => {
         t.dialogs.push({ type: dialog.type(), message: dialog.message() });
         await dialog.dismiss();
@@ -268,7 +268,7 @@ async function runScenario(scenario, server) {
 
   // Checked even after a failed drive: it shows how far the extension got.
   scenario.verify(t, log);
-  t.same('no prompt and no alert', t.dialogs, []);
+  t.same('no prompt and no alert, apart from those the scenario names', t.dialogs, scenario.dialogs || []);
   t.same('no request was attempted outside the stand-in, apart from those the scenario names', t.outside, scenario.outsideRequests || []);
   if (!scenario.settings.autoSolveCaptcha) {
     t.same('nothing but the person put text in a captcha box',
