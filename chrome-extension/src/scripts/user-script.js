@@ -65,7 +65,7 @@ const defaultSettings = {
   autoPay: false,
   autoProcessPopup: false,
   mobileNumber:'',
-  autoUpgradation:false,
+  autoUpgradation:true,
   confirmberths:false,
   travelInsuranceOpted:'yes',
   autoSolveCaptcha:false,
