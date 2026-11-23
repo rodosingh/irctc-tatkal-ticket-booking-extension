@@ -82,8 +82,8 @@ E2E_LOG=1 npm run test:e2e             # also print what the stand-in recorded
 Exit code 0: all scenarios passed. 1: a scenario failed. 2: could not run:
 no `dist/`, a `dist/` older than the sources it is built from, or isolation
 not verified. A failing scenario prints the stand-in's record, the dialogs
-seen and the last lines the extension logged. A full run takes a little over
-three minutes; nearly all of it is the extension's own fixed waits.
+seen and the last lines the extension logged. A full run takes four to five
+minutes; nearly all of it is the extension's own fixed waits.
 
 ## Files
 
@@ -125,7 +125,7 @@ Add an object to the array in `scenarios.js`:
 `t` has `until(what, (log) => done, timeoutMs)`, `pause(ms)`, `readLog()`,
 `setClock('HH:MM:SS')`, `switchOff()` (stores the settings again with Auto
 Booking off, as the options page does), `page` (Playwright's, for acting as
-the person), `dialogs` (any prompt or alert that came up; none is expected),
+the person), `dialogs` (any prompt or alert that came up),
 `check(name, ok, detail)` and `same(name, actual, expected)`. Run
 with `E2E_LOG=1` to see the keys the stand-in records. Each scenario gets a
 fresh browser profile. `booking(...)` builds a whole-flow scenario whose
@@ -133,9 +133,10 @@ checks follow from its settings.
 
 A scenario whose page is expected to attempt a request to another host lists
 it under `outsideRequests`, as `'POST https://host/path'`. Any other attempt
-fails the scenario. So does a prompt or an alert, and so does text put in a
-captcha box by anything but the person, unless the scenario turns
-`autoSolveCaptcha` on. The runner checks these three after `verify`.
+fails the scenario. So does a prompt or an alert that the scenario does not
+list under `dialogs`, and so does text put in a captcha box by anything but
+the person, unless the scenario turns `autoSolveCaptcha` on. The runner checks
+these three after `verify`.
 
 If the extension starts looking for something new, add it to
 `site/standin.js` from the selector in `user-script.js`, give it a `data-rec`
@@ -276,8 +277,9 @@ Branches of the extension that no scenario takes:
   first date cell that is not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
 - An empty user id or password, and a mobile number that is not ten digits.
-- A single name picked from the saved passenger list, and a name that list
-  never offers.
+- A single name picked from the saved passenger list, a name that list never
+  offers whose row is then filled in by hand, and `+ Add Passenger` adding no
+  row.
 - A payment method or provider that is not on the payment page.
 - Auto Booking switched off anywhere but at the login captcha, and the saved
   details cleared at any point.

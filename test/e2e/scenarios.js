@@ -566,6 +566,54 @@ module.exports = [
     },
   },
 
+  // The second name is not in the site's list. The extension gives it twenty
+  // seconds, says so in a pop-up and waits for that row to be filled in. The
+  // person takes the row off the page instead.
+  {
+    name: 'saved passenger list, a name it never offers and that row removed by hand: the names after it are still picked',
+    site: {
+      loginCaptcha: ['R7KQ2M'],
+      savedPassengers: [
+        { name: 'Asha Example', age: 34, gender: 'F' },
+        { name: 'Ravi Example', age: 61, gender: 'M' },
+      ],
+    },
+    settings: settings({
+      quotaType: 'GENERAL',
+      masterData: true,
+      passengerNames: [
+        { id: 1, name: 'Ravi Example', isSelected: true },
+        { id: 2, name: 'Nobody Example', isSelected: true },
+        { id: 3, name: 'Asha Example', isSelected: true },
+      ],
+    }),
+    // The one pop-up this run is expected to raise.
+    dialogs: [{
+      type: 'alert',
+      message: 'Passenger "Nobody Example" was not found in your IRCTC master list.'
+        + '\nChoose passenger 2 yourself. The automation carries on once that row is filled.',
+    }],
+    async drive(t) {
+      await cursorInCaptcha(t, 'login.captcha');
+      await typeAndEnter(t, 'R7KQ2M');
+      await t.until('the pop-up about the name that is not offered', () => t.dialogs.length > 0, 60000);
+      await t.page.locator('app-passenger').nth(1).locator('a.fa-remove').click();
+      await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
+    },
+    verify(t, log) {
+      t.same('the two names the list offers are picked, each in a row of its own',
+        clicked(log, 'passenger[').filter((key) => key.includes('.option[')),
+        ['passenger[0].name.option[Ravi Example]', 'passenger[1].name.option[Asha Example]']);
+      t.same('the form is continued once, with those two rows',
+        submitted(log, 'passengers').map((form) => form.passengers), [[
+          { name: 'Ravi Example', age: '61', gender: 'M', berth: '', food: '' },
+          { name: 'Asha Example', age: '34', gender: 'F', berth: '', food: '' },
+        ]]);
+      t.same('the person typed the login captcha, removed that row and did nothing else',
+        byThePerson(log), ['input login.captcha', 'click passenger[1].remove']);
+    },
+  },
+
   // Every answer takes four seconds here, and on the review page Enter is
   // pressed again while Continue is still awaited.
   booking('whole flow to the payment page, review captcha typed then Enter twice, autoPay off: one Continue, Pay is not pressed', {
