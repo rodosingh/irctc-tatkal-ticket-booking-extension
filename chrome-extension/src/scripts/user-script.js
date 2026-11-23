@@ -1467,6 +1467,8 @@ async function handleCaptchaAndContinue() {
   }
 }
 async function selectPaymentMethod() {
+  // An empty saved value would match every tile
+  if (!paymentMethod) return false;
   // The tiles mount a moment after app-payment-options itself, so querying
   // straight away used to run against an empty list and select nothing (#94).
   await waitForElementToAppear(PAYMENT_METHOD, PAYMENT_OPTIONS_WAIT_TIME);
@@ -1484,14 +1486,17 @@ async function selectPaymentMethod() {
         // Click on the element
         await humanClick(element);
         Logger.info('Clicked on :', paymentMethod);
-        return; // Exit the loop after clicking the element
+        return true; // Exit the loop after clicking the element
       }
     }
   } else {
     Logger.info('No elements found with the specified classes.');
   }
+  return false;
 }
 async function selectPaymentProvider() {
+  // An empty saved value would match every tile
+  if (!paymentProvider) return false;
   // The provider list only renders after a payment method has been picked.
   await waitForElementToAppear(PAYMENT_PROVIDER, PAYMENT_OPTIONS_WAIT_TIME);
 
@@ -1508,11 +1513,12 @@ async function selectPaymentProvider() {
         // Simulate a click on the element
         await humanClick(element);
         Logger.info('Selected text:', element.textContent);
-        return; // Exit the loop after selecting the text
+        return true; // Exit the loop after selecting the text
       }
     }
   }
   Logger.info("No text found containing",paymentProvider);
+  return false;
 }
 async function clickPayButton() {
   // Find the button with the class "btn-primary" and "ng-star-inserted"
@@ -1523,9 +1529,11 @@ async function clickPayButton() {
     // Simulate a click on the button
     await humanClick(button);
     Logger.info('Clicked on button:', button.textContent);
+    return true;
   } else {
     Logger.info("No button found containing 'Pay'.");
   }
+  return false;
 }
 
 // Function to click the confirm button in the eWallet component
@@ -1725,14 +1733,28 @@ async function executeFunctions() {
     await waitForElementToAppear(PAYMENT_COMPONENT);
 
     // Payment Selection <Page 4>
-    await selectPaymentMethod();
-    await selectPaymentProvider();
+    const methodSelected = await selectPaymentMethod();
+    // With Pay & Book on, a missed method already hands the page to the
+    // user, so no provider is looked for under whatever else is open.
+    const providerSelected = (methodSelected || !autoPay) && await selectPaymentProvider();
 
     if (autoPay) {
-      await clickPayButton();
+      // Never press Pay & Book on an option other than the saved one: tell
+      // the user what was missing and leave the payment page to them.
+      if (!providerSelected) {
+        const notFound = methodSelected
+          ? 'payment provider "' + paymentProvider + '"'
+          : 'payment method "' + paymentMethod + '"';
+        alert(
+          'Pay & Book was not clicked: ' + notFound + ' not found on the payment page.' +
+          '\nPlease choose the payment option and pay yourself.'
+        );
+        return;
+      }
+      const payClicked = await clickPayButton();
 
       // Payment Confirmation for Ewallet <Page 5>
-      if (paymentMethod === EWALLET_IRCTC_DEFAULT) {
+      if (payClicked && paymentMethod === EWALLET_IRCTC_DEFAULT) {
         await waitForElementToAppear(EWALLET_COMPONENT);
         await clickEwalletConfirmButton();
       }
