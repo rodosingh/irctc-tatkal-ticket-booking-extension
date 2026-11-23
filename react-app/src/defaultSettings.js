@@ -19,7 +19,7 @@ const defaultSettings = {
     paymentProvider: 'PAYTM',
     autoPay: false,
     mobileNumber: '',
-    autoUpgradation: false,
+    autoUpgradation: true,
     confirmberths: false,
     travelInsuranceOpted: 'yes',
     preferredLanguage: 'English',
