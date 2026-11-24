@@ -297,7 +297,9 @@
                     at once, unless <strong>Opening Day Booking</strong> is on.</li>
                 <li><strong>Train and passengers.</strong> It opens your class on your train, asks for
                     availability again every <strong>Refresh Time (ms)</strong> until IRCTC enables Book Now,
-                    and presses it. If IRCTC then asks you to confirm the station, answer it yourself: the
+                    and presses it. If IRCTC answers with
+                    <code>We are experiencing High Load – Please retry.</code> instead, it asks again at the
+                    same interval, but never while the page is still loading. If IRCTC then asks you to confirm the station, answer it yourself: the
                     extension accepts it only when
                     <strong>Auto-Accept 'From/To Station' Confirmation Dialogs</strong> is ticked, and it
                     looks for the question once. It then fills in the passenger page and presses
@@ -386,6 +388,10 @@
                     <strong>Auto Booking</strong> off.</li>
                 <li><code>Train 12345 was not found in the search results. ...</code> Pick a train and class and
                     press Book Now yourself, or correct the details, save and reload the tab.</li>
+                <li><code>IRCTC says: ... Auto refresh has stopped. ...</code> IRCTC refused the availability
+                    request for a reason that asking again cannot fix. Read its message. When you can, click
+                    the class, pick the date and press Book Now yourself; the extension carries on from the
+                    passenger page.</li>
                 <li><code>Class 3A was not found on train 12345. ...</code> Click another class on that train.
                     The extension carries on.</li>
                 <li><code>Passenger "Asha Example" was not found in your IRCTC master list. ...</code> Fill in

@@ -32,6 +32,8 @@
       { number: '99123', name: 'STANDIN EXPRESS', classes: ['SL', '3A', '2A'] },
     ],
     refreshesBeforeBookable: 0, // Book Now stays disabled for the first N availability enquiries
+    availabilityErrors: [], // texts that answer the first availability enquiries in turn, in place of availability
+    enquiryTime: 0, // ms an availability enquiry takes, the loading overlay up meanwhile; 0 = a moment, no overlay
     autoUpgradationChecked: false, // how the two preference boxes are rendered
     confirmBerthsChecked: false,
     savedPassengers: [], // [{ name, age, gender }] offered by the passenger name box
@@ -147,6 +149,8 @@
   // ---- shared pieces ----
   const root = document.querySelector('app-root');
   const main = h('div');
+  // The overlay the site puts up while it waits for an answer.
+  const loading = h('div', { class: 'my-loading', hidden: true }, 'Please Wait...');
   function show(view, ...nodes) {
     record('view', view);
     main.replaceChildren(...nodes);
@@ -345,6 +349,7 @@
     });
     const className = (code) => CLASS_NAMES[code] || code;
     let enquiries = 0;
+    let pending = 0; // enquiries asked for and not yet answered
 
     const card = (train) => {
       const rec = `train[${train.number}]`;
@@ -355,16 +360,41 @@
 
       // Choosing a class swaps the class cells for a tab per class and one
       // availability cell per date; clicking the selected tab asks again.
+      // With `enquiryTime` an enquiry takes that long and the loading overlay
+      // is up meanwhile. One asked for while another is pending is recorded as
+      // such: on the real site that doubled request is what signs people out.
+      const ask = (code) => {
+        if (!cfg.enquiryTime) return later(() => enquire(code));
+        record('enquiry', rec, { pending: pending > 0 });
+        pending += 1;
+        loading.hidden = false;
+        setTimeout(() => {
+          pending -= 1;
+          loading.hidden = pending === 0;
+          enquire(code);
+        }, cfg.enquiryTime);
+      };
       const enquire = (code) => {
         enquiries += 1;
+        const error = cfg.availabilityErrors[enquiries - 1];
         const bookable = enquiries > cfg.refreshesBeforeBookable;
         choice = null;
         book.classList.add('disable-book');
         tabs.replaceChildren(h('p-tabmenu', null, h('ul', null, train.classes.map((other) => {
           const tab = h('div', { 'data-rec': `${rec}.tab[${other}]` }, className(other));
-          tab.addEventListener('click', () => later(() => enquire(other)));
+          tab.addEventListener('click', () => ask(other));
           return h('li', { role: 'tab', 'aria-selected': String(other === code), 'aria-expanded': String(other === code) }, h('a', null, tab));
         }))));
+        // A refused enquiry shows its reason where the dates would be, and in
+        // a toast that goes away by itself. No availability is added.
+        if (error) {
+          cells.replaceChildren(h('div', { class: 'col-xs-12' }, error));
+          const toast = h('p-toast', null, h('div', { class: 'ui-toast-message' },
+            h('div', { class: 'ui-toast-summary' }, 'Error!'), h('div', { class: 'ui-toast-detail' }, error)));
+          root.append(toast);
+          setTimeout(() => toast.remove(), 3000);
+          return;
+        }
         const dateCells = dates.map((date) => {
           const cell = h('div', { class: 'pre-avl', 'data-rec': `${rec}.date[${date}]` }, h('div', null, h('strong', null, date)));
           cell.addEventListener('click', () => {
@@ -386,7 +416,7 @@
       cells.append(...train.classes.map((code) => {
         const cell = h('div', { class: 'pre-avl', 'data-rec': `${rec}.class[${code}]` },
           h('div', null, h('strong', null, className(code))), h('div', null, 'Refresh'));
-        cell.addEventListener('click', () => later(() => enquire(code)));
+        cell.addEventListener('click', () => ask(code));
         return cell;
       }));
       book.addEventListener('click', () => {
@@ -566,7 +596,7 @@
   if (cfg.clock) setClock(cfg.clock);
   tick();
   setInterval(tick, 250);
-  root.append(header, main);
+  root.append(header, main, loading);
   if (cfg.languagePopup) root.append(languageDialog());
   showHome();
 

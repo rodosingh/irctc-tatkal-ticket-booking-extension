@@ -213,6 +213,15 @@ Train list
   `.link.ng-star-inserted`, after the cell itself is on the page (the
   extension counts exactly these insertions). A click on the selected tab asks
   again.
+- An enquiry that is refused (`availabilityErrors`) adds no availability. Its
+  reason is shown where the date cells would be, in a `div.col-xs-12` with no
+  elements inside it, and in a `p-toast .ui-toast-detail` that goes away
+  after three seconds. The tabs are drawn as usual.
+- With `enquiryTime` an enquiry takes that long, and `div.my-loading` is
+  visible while one is awaited. An enquiry asked for meanwhile is recorded
+  with `pending: true`. These two selectors and the one for the reason come
+  from pull request 112 of the original project, where they were checked on
+  the real site; they have not been checked for this project.
 - A click on a date cell enables Book Now (`button.btnDefault.train_Search`
   loses `disable-book`) at once. Book Now goes straight to the passenger page.
 
@@ -277,6 +286,7 @@ Branches of the extension that no scenario takes:
   (the pop-up for it), its class not offered, and a first date cell that is
   not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
+- An enquiry's reason shown only in the toast, and the `Client IP` message.
 - An empty user id or password, and a mobile number that is not ten digits.
 - A single name picked from the saved passenger list, a name that list never
   offers whose row is then filled in by hand, and `+ Add Passenger` adding no

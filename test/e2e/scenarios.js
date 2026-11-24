@@ -16,6 +16,7 @@
 
 const NOTE = '#tatkal-captcha-note';
 const LOGIN_NOTE = 'Type the captcha and press Enter.';
+const HIGH_LOAD = 'We are experiencing High Load \u2013 Please retry.';
 const LOGIN_RETRY_NOTE = 'A new captcha is shown. Type it and press Enter.';
 const SEATS = 'AVAILABLE-0042';
 const NO_SEATS = 'not found, check the page';
@@ -683,6 +684,65 @@ module.exports = [
         [['input login.captcha', 'click train[99120].class[3A]', 'click train[99120].date[Fri, 07 Mar]', 'click train[99120].book'], 3]);
       const wait = elapsed(log, 'view passengers', 'click passenger[0].remove');
       t.check(`the extension starts on the passenger page ${wait} ms after it appeared (it used to go on looking for its train for the rest of 5.5 s)`, wait < 2500);
+      t.same('the passenger form is continued once, for the two selected passengers',
+        submitted(log, 'passengers').map((form) => form.passengers.map((passenger) => passenger.name)), [['Asha Example', 'Ravi Example']]);
+    },
+  },
+
+  // The first two availability enquiries are answered with the site's High
+  // Load message, which adds no availability. Every enquiry takes 3.3 s with
+  // the loading overlay up, and the extension looks every 2 s: after each
+  // time it asks again, its next look falls while that answer is still
+  // awaited, with the last refusal still on the page.
+  {
+    name: 'availability refused twice with High Load: asked again only once the page has stopped loading, then booked',
+    site: { availabilityErrors: [HIGH_LOAD, HIGH_LOAD], enquiryTime: 3300 },
+    settings: settings({ quotaType: 'GENERAL', refreshTime: 2000 }),
+    async drive(t) {
+      await signedIn(t);
+      await t.until('Book Now to be pressed', (log) => of(log, 'submit', 'book').length > 0, 60000);
+    },
+    verify(t, log) {
+      t.same('three enquiries, none of them asked for while another was awaited',
+        of(log, 'enquiry', 'train[99123]').map((entry) => entry.pending), [false, false, false]);
+      t.same('the class clicked once and its tab once after each refusal, by the extension',
+        [pressed(log, 'train[99123].class[3A]'), pressed(log, 'train[99123].tab[3A]')], [['script'], ['script', 'script']]);
+      t.same('Book Now pressed once, for the configured train, class and date',
+        submitted(log, 'book'), [{ train: '99123', travelClass: '3A', date: 'Fri, 07 Mar' }]);
+      t.same('all of it done by the extension', byThePerson(log), []);
+    },
+  },
+
+  // The enquiry is refused for a reason that asking again cannot change. The
+  // extension says so once and leaves the train list to the person.
+  {
+    name: 'availability refused for a reason asking again cannot fix: a pop-up says so, nothing is asked again, a train booked by hand is carried on from',
+    site: { availabilityErrors: ['Date outside the booking period.'], enquiryTime: 500 },
+    settings: settings({ quotaType: 'GENERAL', refreshTime: 1000 }),
+    dialogs: [{
+      type: 'alert',
+      message: 'IRCTC says:\n\nDate outside the booking period.'
+        + '\n\nAuto refresh has stopped. The automation carries on if you book a train yourself.',
+    }],
+    async drive(t) {
+      await signedIn(t);
+      await t.until('the pop-up about the refused enquiry', () => t.dialogs.length > 0, 45000);
+      await t.pause(3500); // three refresh intervals in which nothing more may be asked
+      t.same('one enquiry so far, and no click on the tab', [
+        (await t.readLog()).filter((entry) => entry.type === 'enquiry').length,
+        clicked(await t.readLog(), 'train[99123].tab['),
+      ], [1, []]);
+      for (const part of ['tab[3A]', 'date[Fri, 07 Mar]', 'book']) {
+        await t.page.locator(`[data-rec="train[99123].${part}"]`).click();
+      }
+      await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
+    },
+    verify(t, log) {
+      t.same('two enquiries, the second asked for by the person',
+        [of(log, 'enquiry', 'train[99123]').map((entry) => entry.pending), pressed(log, 'train[99123].tab[3A]')],
+        [[false, false], ['user']]);
+      t.same('Book Now pressed once, by the person', [submitted(log, 'book'), pressed(log, 'train[99123].book')],
+        [[{ train: '99123', travelClass: '3A', date: 'Fri, 07 Mar' }], ['user']]);
       t.same('the passenger form is continued once, for the two selected passengers',
         submitted(log, 'passengers').map((form) => form.passengers.map((passenger) => passenger.name)), [['Asha Example', 'Ravi Example']]);
     },

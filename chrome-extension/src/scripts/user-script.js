@@ -124,6 +124,8 @@ let SELECTED_CLASS_TAB = 'p-tabmenu li[role="tab"][aria-selected="true"][aria-ex
 let BOOK_NOW_BUTTON = 'button.btnDefault.train_Search';
 let BUTTON_DISABLE_CLASS = 'disable-book';
 let LINK_INSERTED = '.link.ng-star-inserted';
+let LOADING_OVERLAY = 'div.my-loading';
+let AVAILABILITY_ERROR = 'p-toast .ui-toast-detail, app-train-avl-enq div.col-xs-12:not(:has(*))';
 
 // POP UP
 let DIALOG_FROM = 'p-confirmdialog[key="tofrom"]';
@@ -215,6 +217,8 @@ const SELECTOR_VAR_MAP = {
   BOOK_NOW_BUTTON: (v) => { BOOK_NOW_BUTTON = v; },
   BUTTON_DISABLE_CLASS: (v) => { BUTTON_DISABLE_CLASS = v; },
   LINK_INSERTED: (v) => { LINK_INSERTED = v; },
+  LOADING_OVERLAY: (v) => { LOADING_OVERLAY = v; },
+  AVAILABILITY_ERROR: (v) => { AVAILABILITY_ERROR = v; },
   DIALOG_FROM: (v) => { DIALOG_FROM = v; },
   DIALOG_ACCEPT: (v) => { DIALOG_ACCEPT = v; },
   DIALOG_COMPONENT: (v) => { DIALOG_COMPONENT = v; },
@@ -1050,6 +1054,19 @@ async function refreshTrain() {
     Logger.error('An error occurred while refreshing the train:', error);
   }
 }
+// Text of the error IRCTC shows when an availability request fails, if any.
+function findAvailabilityError(rootElement) {
+  const shown = Array.from(document.querySelectorAll(AVAILABILITY_ERROR)).find((element) =>
+    isElementVisible(element) && element.textContent.trim() &&
+    (rootElement.contains(element) || element.closest('p-toast')));
+  return shown ? shown.textContent.trim().replace(/\s+/g, ' ') : '';
+}
+// Asking again helps with a busy server. It cannot help with a wrong date or
+// quota, and it makes things worse while the IP is blocked ("Client IP").
+function isWorthRetrying(errorText) {
+  if (/client ip/i.test(errorText)) return false;
+  return /high load|retry|try again|unable to|temporar|busy|timed? ?out|unavailable|technical/i.test(errorText);
+}
 async function selectAvailableTicket() {
   let rootElement = document.querySelectorAll(TRAIN_COMPONENT)[trainFoundAtPosition];
 
@@ -1156,6 +1173,19 @@ async function bookTicket() {
             Logger.error("An error occurred:", error);
             // Optionally, you can choose to break the loop or handle the error differently
         }
+    } else if (!isElementVisible(document.querySelector(LOADING_OVERLAY))) {
+        // Nothing arrived and IRCTC is not waiting on a request, so the last
+        // enquiry failed ("We are experiencing High Load - Please retry."), which
+        // adds no availability rows. Ask again, as a person would press Refresh.
+        // Never while the loader is up, so a pending enquiry is not doubled.
+        const availabilityError = findAvailabilityError(rootElement);
+        if (availabilityError && !isWorthRetrying(availabilityError)) {
+          Logger.error('IRCTC rejected the availability request:', availabilityError);
+          alert(`IRCTC says:\n\n${availabilityError}\n\nAuto refresh has stopped. The automation carries on if you book a train yourself.`);
+          return;
+        }
+        Logger.warn('No availability received. Refreshing the class again.', availabilityError);
+        await refreshTrain();
     }
     await delay(refreshTime); // Adjust the delay as needed
 }
