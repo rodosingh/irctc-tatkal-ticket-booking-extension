@@ -1,6 +1,6 @@
 {
   "name": "tatkal-ticket-booking",
-  "version": "6.3.5",
+  "version": "6.3.6",
   "private": true,
   "workspaces": [
     "chrome-extension",
