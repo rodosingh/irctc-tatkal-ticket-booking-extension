@@ -1,6 +1,6 @@
 {
   "name": "@tatkal-ticket-booking/react-app",
-  "version": "6.3.5",
+  "version": "6.3.6",
   "private": true,
   "description": "Options page of the Tatkal Ticket Booking extension",
   "main": "options.js",
