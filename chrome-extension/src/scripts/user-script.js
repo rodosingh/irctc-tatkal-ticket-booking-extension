@@ -36,6 +36,9 @@ const STORAGE_KEY = 'tatkalTicketBookingFormData';
 
 // How long a page gets to render its captcha before it is treated as captcha-less.
 const CAPTCHA_WAIT_TIME = 3000;
+// The login form gets this long, counted from when it opens, before Sign In is
+// pressed without a captcha. One that is drawn later is still picked up.
+const LOGIN_CAPTCHA_WAIT_TIME = 1000;
 // The note shown while the person types a captcha into the page.
 const CAPTCHA_NOTE_ID = 'tatkal-captcha-note';
 // The payment page mounts its tiles a moment after the component itself.
@@ -742,6 +745,7 @@ async function login() {
     Logger.error('Login UserID field not found within 5 seconds. Check selector:', LOGIN_USERID);
     return;
   }
+  const formShownAt = Date.now();
   
   await delay(200); // Give Angular a moment to stabilize the form
 
@@ -766,16 +770,30 @@ async function login() {
   if(username && password){
     // IRCTC no longer serves a captcha on every login. Wait briefly for a
     // usable one and sign in directly when the form does not have it (#94).
-    const captcha = await waitForUsableCaptcha(
-      () => document.querySelector(LOGIN_CAPTCHA_IMAGE),
-      () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT)
-    );
+    // The wait is short and counts from when the form opened, so that filling
+    // in the two fields is not waited for twice. With captcha reading on, the
+    // wait is as it always was.
+    const getImage = () => document.querySelector(LOGIN_CAPTCHA_IMAGE);
+    const getInput = () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT);
+    const captcha = await waitForUsableCaptcha(getImage, getInput, autoSolveCaptcha
+      ? CAPTCHA_WAIT_TIME
+      : Math.max(0, LOGIN_CAPTCHA_WAIT_TIME - (Date.now() - formShownAt)));
 
     if (captcha) {
       await fillLoginCaptcha(loginModal, captcha);
     } else {
       Logger.info('No captcha on the login form. Signing in directly.');
       await clickLoginSubmit(loginModal);
+      // The form may draw a captcha after all, late or because that sign-in
+      // was refused. For the rest of the usual wait it is handed to the person
+      // like any other. Not awaited: the run goes on once the form has gone.
+      if (!autoSolveCaptcha) {
+        waitForCondition(() => !document.contains(loginModal) || (
+          getImage() && isElementVisible(getInput()) ? { image: getImage(), input: getInput() } : null
+        ), CAPTCHA_WAIT_TIME)
+          .then((late) => (late && late !== true ? fillLoginCaptcha(loginModal, late) : null))
+          .catch(ignoreStop);
+      }
     }
   }
 }

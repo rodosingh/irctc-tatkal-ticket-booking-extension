@@ -288,8 +288,9 @@
                 <li><strong>Sign-in.</strong> The extension fills in your username and password. If there is a
                     captcha, a note at the top of the page says <code>Type the captcha and press Enter.</code>
                     and the cursor is in the box. If IRCTC then shows a new captcha, the note says
-                    <code>A new captcha is shown. Type it and press Enter.</code> With no captcha, the extension
-                    signs in by itself.</li>
+                    <code>A new captcha is shown. Type it and press Enter.</code> If the form shows no captcha
+                    within about a second of opening, the extension presses Sign In by itself; a captcha
+                    that appears just after that is still yours to type.</li>
                 <li><strong>Search.</strong> It fills in the journey. For the Tatkal quotas it presses Search
                     when the clock in the IRCTC page header reaches <strong>Booking Start Time</strong>. Until
                     then the filled-in form just sits there; that is expected. Do not reload the tab

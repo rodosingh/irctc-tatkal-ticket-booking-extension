@@ -171,7 +171,9 @@ Home page and sign-in
   `input[formcontrolname="password"]` and `button[type="submit"]`. A captcha
   is `app-captcha` holding `img.captcha-img` and `input#captcha`. Without a
   captcha the box is absent, or present but not rendered. A captcha is drawn
-  in the same tick as its form, here and on the review page.
+  in the same tick as its form, here and on the review page. With
+  `loginCaptchaLate` the login form has none until a first sign-in without
+  it has been refused, and draws it then.
 - A sign-in that succeeds removes `app-login`. One that is refused keeps it
   and shows a new captcha in an empty box.
 - Sign-in and the review step are forms with a submit button, so Enter in the
@@ -287,6 +289,8 @@ Branches of the extension that no scenario takes:
   not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
 - An enquiry's reason shown only in the toast, and the `Client IP` message.
+- A login captcha that the form draws by itself a moment after it opens. Only
+  one drawn after a refused sign-in is covered.
 - An empty user id or password, and a mobile number that is not ten digits.
 - A single name picked from the saved passenger list, a name that list never
   offers whose row is then filled in by hand, and `+ Add Passenger` adding no

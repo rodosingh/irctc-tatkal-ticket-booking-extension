@@ -13,6 +13,7 @@
     loginCaptcha: [], // texts shown in turn, one per sign-in attempt; [] = no captcha
     loginCaptchaUnpainted: false, // with no captcha, still leave an unrendered box in the form
     loginRejects: 0, // refuse the first N sign-ins whatever was typed
+    loginCaptchaLate: false, // draw the login captcha only once a first sign-in without it was refused
     reviewCaptcha: [], // the same three for the review page
     reviewCaptchaUnpainted: false,
     reviewRejects: 0,
@@ -181,9 +182,10 @@
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   }
   // A captcha box and its checking. Each new captcha shows the next text.
-  function captchaStep(rec, texts, unpainted, rejects) {
+  function captchaStep(rec, texts, unpainted, rejects, late) {
     let attempts = 0;
     let drawn = 0;
+    let held = Boolean(late); // not drawn yet: the site asks for it only after a sign-in without it
     const slot = h('div');
     const shown = () => (texts.length ? texts[Math.min(drawn, texts.length - 1)] : null);
     const box = () => slot.querySelector('#captcha');
@@ -214,13 +216,17 @@
         record('shown', rec);
       });
     };
-    render();
+    if (!held) render();
     return {
       slot,
-      refused: () => next(cfg.captchaRedraw),
+      refused: () => {
+        if (!held) return next(cfg.captchaRedraw);
+        held = false;
+        render();
+      },
       typed: () => valueOf(box()),
       passes() {
-        const ok = attempts >= rejects && (shown() === null || this.typed() === shown());
+        const ok = !held && attempts >= rejects && (shown() === null || this.typed() === shown());
         attempts += 1;
         return ok;
       },
@@ -261,7 +267,7 @@
   function loginForm() {
     const userid = h('input', { formcontrolname: 'userid', placeholder: 'User Name', autocomplete: 'off', 'data-rec': 'login.userid' });
     const password = h('input', { formcontrolname: 'password', type: 'password', placeholder: 'Password', 'data-rec': 'login.password' });
-    const captcha = captchaStep('login.captcha', cfg.loginCaptcha, cfg.loginCaptchaUnpainted, cfg.loginRejects);
+    const captcha = captchaStep('login.captcha', cfg.loginCaptcha, cfg.loginCaptchaUnpainted, cfg.loginRejects, cfg.loginCaptchaLate);
     const error = h('p', { class: 'error' });
     const form = h('form', null, userid, password, captcha.slot, error,
       h('button', { type: 'submit', 'data-rec': 'login.submit' }, 'SIGN IN'));

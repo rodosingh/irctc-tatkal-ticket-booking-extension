@@ -527,6 +527,29 @@ module.exports = [
       t.same('the unpainted captcha box is left alone: nothing typed, no cursor put in it',
         [...of(log, 'input', 'login.captcha'), ...of(log, 'focus', 'login.captcha')], []);
       t.same('all of it done by the extension', byThePerson(log), []);
+      const wait = elapsed(log, 'input login.password', 'click login.submit');
+      t.check(`Sign In is pressed ${wait} ms after the password was filled in (it used to wait three seconds for a captcha)`, wait < 1500);
+    },
+  },
+
+  // The form has no captcha when it opens. The site asks for one only after a
+  // sign-in without it, by which time the extension has already pressed Sign In.
+  {
+    name: 'login form that draws its captcha only after a sign-in without one: the captcha is still handed to the person',
+    site: { loginCaptcha: ['R7KQ2M'], loginCaptchaLate: true },
+    settings: settings(),
+    async drive(t) {
+      seesNote(t, 'once the captcha is drawn', await cursorInCaptcha(t, 'login.captcha'), 'login.captcha', LOGIN_NOTE);
+      await typeAndEnter(t, 'R7KQ2M');
+      await signedIn(t);
+      t.same('the note is gone once signed in', (await look(t)).note, null);
+    },
+    verify(t, log) {
+      t.same('two sign-ins: the one without a captcha is refused, the next carries the captcha as typed',
+        submitted(log, 'login'),
+        [{ ...signInForm, captcha: '', accepted: false }, { ...signInForm, captcha: 'R7KQ2M', accepted: true }]);
+      t.same('Sign In pressed twice by the extension: by itself, then on Enter', pressed(log, 'login.submit'), ['script', 'script']);
+      t.same('the person typed the captcha and did nothing else', byThePerson(log), ['input login.captcha']);
     },
   },
 
