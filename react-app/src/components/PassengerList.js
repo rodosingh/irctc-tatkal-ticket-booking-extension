@@ -298,6 +298,14 @@ const PassengerList = () => {
         disableDensitySelector // Disable density selector
         disableRowSelectionOnClick // Optional: Prevent row selection on click
         hideFooter
+        sx={{
+          // The age of a row being edited is typed into a box drawn like the
+          // dropdowns beside it. Without one the cell looks like an empty cell.
+          '& .MuiDataGrid-cell--editing[data-field="age"] .MuiDataGrid-editInputCell': {
+            border: '1px solid rgba(0, 0, 0, 0.23)',
+            borderRadius: 1,
+          },
+        }}
       />
       <Typography variant="body2" sx={{ mt: 1.5, color: 'text.secondary' }}>
         Tip: Select the checkbox for each passenger you want to book. Unselected passengers will not be filled.
