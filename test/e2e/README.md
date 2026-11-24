@@ -82,7 +82,7 @@ E2E_LOG=1 npm run test:e2e             # also print what the stand-in recorded
 Exit code 0: all scenarios passed. 1: a scenario failed. 2: could not run:
 no `dist/`, a `dist/` older than the sources it is built from, or isolation
 not verified. A failing scenario prints the stand-in's record, the dialogs
-seen and the last lines the extension logged. A full run takes four to five
+seen and the last lines the extension logged. A full run takes about five
 minutes; nearly all of it is the extension's own fixed waits.
 
 ## Files
@@ -171,7 +171,9 @@ Home page and sign-in
   `input[formcontrolname="password"]` and `button[type="submit"]`. A captcha
   is `app-captcha` holding `img.captcha-img` and `input#captcha`. Without a
   captcha the box is absent, or present but not rendered. A captcha is drawn
-  in the same tick as its form, here and on the review page.
+  in the same tick as its form, here and on the review page. With
+  `loginCaptchaLate` the login form has none until a first sign-in without
+  it has been refused, and draws it then.
 - A sign-in that succeeds removes `app-login`. One that is refused keeps it
   and shows a new captcha in an empty box.
 - Sign-in and the review step are forms with a submit button, so Enter in the
@@ -213,6 +215,15 @@ Train list
   `.link.ng-star-inserted`, after the cell itself is on the page (the
   extension counts exactly these insertions). A click on the selected tab asks
   again.
+- An enquiry that is refused (`availabilityErrors`) adds no availability. Its
+  reason is shown where the date cells would be, in a `div.col-xs-12` with no
+  elements inside it, and in a `p-toast .ui-toast-detail` that goes away
+  after three seconds. The tabs are drawn as usual.
+- With `enquiryTime` an enquiry takes that long, and `div.my-loading` is
+  visible while one is awaited. An enquiry asked for meanwhile is recorded
+  with `pending: true`. These two selectors and the one for the reason come
+  from pull request 112 of the original project, where they were checked on
+  the real site; they have not been checked for this project.
 - A click on a date cell enables Book Now (`button.btnDefault.train_Search`
   loses `disable-book`) at once. Book Now goes straight to the passenger page.
 
@@ -277,6 +288,10 @@ Branches of the extension that no scenario takes:
   (the pop-up for it), its class not offered, and a first date cell that is
   not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
+- An enquiry's reason shown only in the toast, the `Client IP` message, and
+  the train list drawn again while a class is open.
+- A login captcha that the form draws by itself a moment after it opens. Only
+  one drawn after a refused sign-in is covered.
 - An empty user id or password, and a mobile number that is not ten digits.
 - A single name picked from the saved passenger list, a name that list never
   offers whose row is then filled in by hand, and `+ Add Passenger` adding no

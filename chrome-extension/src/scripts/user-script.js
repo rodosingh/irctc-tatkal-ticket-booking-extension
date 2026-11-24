@@ -36,6 +36,10 @@ const STORAGE_KEY = 'tatkalTicketBookingFormData';
 
 // How long a page gets to render its captcha before it is treated as captcha-less.
 const CAPTCHA_WAIT_TIME = 3000;
+// The login form gets this long, counted from when the extension first sees
+// it, before Sign In is pressed without a captcha. One that is drawn later is
+// still picked up.
+const LOGIN_CAPTCHA_WAIT_TIME = 1000;
 // The note shown while the person types a captcha into the page.
 const CAPTCHA_NOTE_ID = 'tatkal-captcha-note';
 // The payment page mounts its tiles a moment after the component itself.
@@ -48,6 +52,10 @@ const MASTER_PASSENGER_WAIT_TIME = 20000;
 const TRAIN_LIST_WAIT_TIME = 30000;
 // Once rows are showing, how long the wanted train gets to appear among them.
 const TRAIN_RESULTS_WAIT_TIME = 5000;
+// A refused availability enquiry is asked again only once IRCTC's loading
+// overlay has been gone this long, and never sooner than this after the last one.
+const LOADING_QUIET_TIME = 500;
+const RETRY_MIN_INTERVAL = 1000;
 
 const defaultSettings = {
   automationStatus: false,
@@ -124,6 +132,8 @@ let SELECTED_CLASS_TAB = 'p-tabmenu li[role="tab"][aria-selected="true"][aria-ex
 let BOOK_NOW_BUTTON = 'button.btnDefault.train_Search';
 let BUTTON_DISABLE_CLASS = 'disable-book';
 let LINK_INSERTED = '.link.ng-star-inserted';
+let LOADING_OVERLAY = 'div.my-loading';
+let AVAILABILITY_ERROR = 'p-toast .ui-toast-detail, app-train-avl-enq div.col-xs-12:not(:has(*))';
 
 // POP UP
 let DIALOG_FROM = 'p-confirmdialog[key="tofrom"]';
@@ -215,6 +225,8 @@ const SELECTOR_VAR_MAP = {
   BOOK_NOW_BUTTON: (v) => { BOOK_NOW_BUTTON = v; },
   BUTTON_DISABLE_CLASS: (v) => { BUTTON_DISABLE_CLASS = v; },
   LINK_INSERTED: (v) => { LINK_INSERTED = v; },
+  LOADING_OVERLAY: (v) => { LOADING_OVERLAY = v; },
+  AVAILABILITY_ERROR: (v) => { AVAILABILITY_ERROR = v; },
   DIALOG_FROM: (v) => { DIALOG_FROM = v; },
   DIALOG_ACCEPT: (v) => { DIALOG_ACCEPT = v; },
   DIALOG_COMPONENT: (v) => { DIALOG_COMPONENT = v; },
@@ -738,6 +750,7 @@ async function login() {
     Logger.error('Login UserID field not found within 5 seconds. Check selector:', LOGIN_USERID);
     return;
   }
+  const formShownAt = Date.now();
   
   await delay(200); // Give Angular a moment to stabilize the form
 
@@ -762,16 +775,30 @@ async function login() {
   if(username && password){
     // IRCTC no longer serves a captcha on every login. Wait briefly for a
     // usable one and sign in directly when the form does not have it (#94).
-    const captcha = await waitForUsableCaptcha(
-      () => document.querySelector(LOGIN_CAPTCHA_IMAGE),
-      () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT)
-    );
+    // The wait is short and counts from when the form was first seen, so that
+    // filling in the two fields is not waited for twice. With captcha reading
+    // on, the wait is as it always was.
+    const getImage = () => document.querySelector(LOGIN_CAPTCHA_IMAGE);
+    const getInput = () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT);
+    const captcha = await waitForUsableCaptcha(getImage, getInput, autoSolveCaptcha
+      ? CAPTCHA_WAIT_TIME
+      : Math.max(0, LOGIN_CAPTCHA_WAIT_TIME - (Date.now() - formShownAt)));
 
     if (captcha) {
       await fillLoginCaptcha(loginModal, captcha);
     } else {
       Logger.info('No captcha on the login form. Signing in directly.');
       await clickLoginSubmit(loginModal);
+      // The form may draw a captcha after all, late or because that sign-in
+      // was refused. For the rest of the usual wait it is handed to the person
+      // like any other. Not awaited: the run goes on once the form has gone.
+      if (!autoSolveCaptcha) {
+        waitForCondition(() => !document.contains(loginModal) || (
+          getImage() && isElementVisible(getInput()) ? { image: getImage(), input: getInput() } : null
+        ), CAPTCHA_WAIT_TIME)
+          .then((late) => (late && late !== true ? fillLoginCaptcha(loginModal, late) : null))
+          .catch(ignoreStop);
+      }
     }
   }
 }
@@ -1050,6 +1077,40 @@ async function refreshTrain() {
     Logger.error('An error occurred while refreshing the train:', error);
   }
 }
+// The reason IRCTC shows when an availability request fails: in the train's
+// own panel, where the dates would be, and in a toast that goes by itself.
+function findAvailabilityError(rootElement) {
+  const shown = Array.from(document.querySelectorAll(AVAILABILITY_ERROR))
+    .filter((element) => isElementVisible(element) && element.textContent.trim());
+  const textOf = (element) => (element ? element.textContent.trim().replace(/\s+/g, ' ') : '');
+  return {
+    inPanel: textOf(shown.find((element) => rootElement.contains(element))),
+    inToast: textOf(shown.find((element) => element.closest('p-toast'))),
+  };
+}
+// When IRCTC's loading overlay was last seen on this page; 0 = never. Until it
+// has been seen, LOADING_OVERLAY cannot be trusted to say that nothing is awaited.
+let loadingSeenAt = 0;
+// Waits like delay(), looking for the overlay meanwhile: a single look every
+// refresh interval would miss a quick answer and could fall into a gap.
+async function delayWatchingLoading(ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    try {
+      if (isElementVisible(document.querySelector(LOADING_OVERLAY))) loadingSeenAt = Date.now();
+    } catch (error) {
+      // An override that is not a selector: the overlay is never seen
+    }
+    if (Date.now() >= end) return;
+    await delay(Math.min(100, end - Date.now()));
+  }
+}
+// Asking again helps with a busy server. It cannot help with a wrong date or
+// quota, and it makes things worse while the IP is blocked ("Client IP").
+function isWorthRetrying(errorText) {
+  if (/client ip/i.test(errorText)) return false;
+  return /high load|retry|try again|unable to|temporar|busy|timed? ?out|unavailable|technical/i.test(errorText);
+}
 async function selectAvailableTicket() {
   let rootElement = document.querySelectorAll(TRAIN_COMPONENT)[trainFoundAtPosition];
 
@@ -1121,6 +1182,8 @@ async function bookTicket() {
   observer.observe(rootElement, { childList: true, subtree: true });
   
   const classSelected = await scrollToFoundTrainAndSelectClass();
+  let askedAt = Date.now(); // when availability was last asked for
+  let reasonSaid = ''; // the refusal the person has already been told about
 
   // No class was clicked, so no availability will arrive by itself. Say so,
   // and keep watching: if the user clicks a class on this train, the loop
@@ -1129,7 +1192,7 @@ async function bookTicket() {
     alert(`Class ${accommodationClass} was not found on train ${trainNumber}. Click the class you want on this train to carry on.`);
   }
 
-  await delay(1000);
+  await delayWatchingLoading(1000);
 
   while (!isAvlEnquiryCompleted) {
     // The user may have picked the class and pressed Book Now themselves:
@@ -1149,6 +1212,7 @@ async function bookTicket() {
                 // Reset the counters
                 mutationCompletionCounter = 0;
                 await refreshTrain(); // Refresh the train
+                askedAt = Date.now();
             }
         } catch (error) {
             if (error === STOPPED) throw error;
@@ -1156,8 +1220,36 @@ async function bookTicket() {
             Logger.error("An error occurred:", error);
             // Optionally, you can choose to break the loop or handle the error differently
         }
+    } else {
+        // Nothing arrived. If IRCTC shows why for the class that is open ("We
+        // are experiencing High Load - Please retry.", which adds no
+        // availability rows), ask again, as a person would press Refresh.
+        // Never while the loader is up or has only just gone, so that a
+        // pending enquiry is not doubled: that signs people out. A reason that
+        // asking again cannot fix is said once and the class is left to the
+        // person. With no reason on the page, or once the list has been drawn
+        // again, nothing is clicked.
+        try {
+            const settled = document.contains(rootElement) && rootElement.querySelector(SELECTED_CLASS_TAB)
+              && loadingSeenAt && Date.now() - loadingSeenAt >= LOADING_QUIET_TIME;
+            const { inPanel, inToast } = settled ? findAvailabilityError(rootElement) : { inPanel: '', inToast: '' };
+            if (inPanel && !isWorthRetrying(inPanel)) {
+              if (inPanel !== reasonSaid) {
+                reasonSaid = inPanel;
+                Logger.error('IRCTC rejected the availability request:', inPanel);
+                alert(`IRCTC says:\n\n${inPanel}\n\nThe extension will not ask again by itself. Click the class yourself when you can: it carries on from there.`);
+              }
+            } else if (isWorthRetrying(inPanel || inToast) && Date.now() - askedAt >= Math.max(refreshTime, RETRY_MIN_INTERVAL)) {
+              Logger.warn('IRCTC refused the availability request. Asking again.', inPanel || inToast);
+              await refreshTrain();
+              askedAt = Date.now();
+            }
+        } catch (error) {
+            if (error === STOPPED) throw error;
+            Logger.error("An error occurred:", error);
+        }
     }
-    await delay(refreshTime); // Adjust the delay as needed
+    await delayWatchingLoading(refreshTime); // Adjust the delay as needed
 }
 
   // Proceed with booking the ticket

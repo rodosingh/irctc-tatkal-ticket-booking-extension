@@ -13,6 +13,7 @@
     loginCaptcha: [], // texts shown in turn, one per sign-in attempt; [] = no captcha
     loginCaptchaUnpainted: false, // with no captcha, still leave an unrendered box in the form
     loginRejects: 0, // refuse the first N sign-ins whatever was typed
+    loginCaptchaLate: false, // draw the login captcha only once a first sign-in without it was refused
     reviewCaptcha: [], // the same three for the review page
     reviewCaptchaUnpainted: false,
     reviewRejects: 0,
@@ -32,6 +33,8 @@
       { number: '99123', name: 'STANDIN EXPRESS', classes: ['SL', '3A', '2A'] },
     ],
     refreshesBeforeBookable: 0, // Book Now stays disabled for the first N availability enquiries
+    availabilityErrors: [], // texts that answer the first availability enquiries in turn, in place of availability
+    enquiryTime: 0, // ms an availability enquiry takes, the loading overlay up meanwhile; 0 = a moment, no overlay
     autoUpgradationChecked: false, // how the two preference boxes are rendered
     confirmBerthsChecked: false,
     savedPassengers: [], // [{ name, age, gender }] offered by the passenger name box
@@ -147,6 +150,8 @@
   // ---- shared pieces ----
   const root = document.querySelector('app-root');
   const main = h('div');
+  // The overlay the site puts up while it waits for an answer.
+  const loading = h('div', { class: 'my-loading', hidden: true }, 'Please Wait...');
   function show(view, ...nodes) {
     record('view', view);
     main.replaceChildren(...nodes);
@@ -177,9 +182,10 @@
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   }
   // A captcha box and its checking. Each new captcha shows the next text.
-  function captchaStep(rec, texts, unpainted, rejects) {
+  function captchaStep(rec, texts, unpainted, rejects, late) {
     let attempts = 0;
     let drawn = 0;
+    let held = Boolean(late); // not drawn yet: the site asks for it only after a sign-in without it
     const slot = h('div');
     const shown = () => (texts.length ? texts[Math.min(drawn, texts.length - 1)] : null);
     const box = () => slot.querySelector('#captcha');
@@ -210,13 +216,17 @@
         record('shown', rec);
       });
     };
-    render();
+    if (!held) render();
     return {
       slot,
-      refused: () => next(cfg.captchaRedraw),
+      refused: () => {
+        if (!held) return next(cfg.captchaRedraw);
+        held = false;
+        render();
+      },
       typed: () => valueOf(box()),
       passes() {
-        const ok = attempts >= rejects && (shown() === null || this.typed() === shown());
+        const ok = !held && attempts >= rejects && (shown() === null || this.typed() === shown());
         attempts += 1;
         return ok;
       },
@@ -257,7 +267,7 @@
   function loginForm() {
     const userid = h('input', { formcontrolname: 'userid', placeholder: 'User Name', autocomplete: 'off', 'data-rec': 'login.userid' });
     const password = h('input', { formcontrolname: 'password', type: 'password', placeholder: 'Password', 'data-rec': 'login.password' });
-    const captcha = captchaStep('login.captcha', cfg.loginCaptcha, cfg.loginCaptchaUnpainted, cfg.loginRejects);
+    const captcha = captchaStep('login.captcha', cfg.loginCaptcha, cfg.loginCaptchaUnpainted, cfg.loginRejects, cfg.loginCaptchaLate);
     const error = h('p', { class: 'error' });
     const form = h('form', null, userid, password, captcha.slot, error,
       h('button', { type: 'submit', 'data-rec': 'login.submit' }, 'SIGN IN'));
@@ -345,6 +355,7 @@
     });
     const className = (code) => CLASS_NAMES[code] || code;
     let enquiries = 0;
+    let pending = 0; // enquiries asked for and not yet answered
 
     const card = (train) => {
       const rec = `train[${train.number}]`;
@@ -355,16 +366,41 @@
 
       // Choosing a class swaps the class cells for a tab per class and one
       // availability cell per date; clicking the selected tab asks again.
+      // With `enquiryTime` an enquiry takes that long and the loading overlay
+      // is up meanwhile. One asked for while another is pending is recorded as
+      // such: on the real site that doubled request is what signs people out.
+      const ask = (code) => {
+        if (!cfg.enquiryTime) return later(() => enquire(code));
+        record('enquiry', rec, { pending: pending > 0 });
+        pending += 1;
+        loading.hidden = false;
+        setTimeout(() => {
+          pending -= 1;
+          loading.hidden = pending === 0;
+          enquire(code);
+        }, cfg.enquiryTime);
+      };
       const enquire = (code) => {
         enquiries += 1;
+        const error = cfg.availabilityErrors[enquiries - 1];
         const bookable = enquiries > cfg.refreshesBeforeBookable;
         choice = null;
         book.classList.add('disable-book');
         tabs.replaceChildren(h('p-tabmenu', null, h('ul', null, train.classes.map((other) => {
           const tab = h('div', { 'data-rec': `${rec}.tab[${other}]` }, className(other));
-          tab.addEventListener('click', () => later(() => enquire(other)));
+          tab.addEventListener('click', () => ask(other));
           return h('li', { role: 'tab', 'aria-selected': String(other === code), 'aria-expanded': String(other === code) }, h('a', null, tab));
         }))));
+        // A refused enquiry shows its reason where the dates would be, and in
+        // a toast that goes away by itself. No availability is added.
+        if (error) {
+          cells.replaceChildren(h('div', { class: 'col-xs-12' }, error));
+          const toast = h('p-toast', null, h('div', { class: 'ui-toast-message' },
+            h('div', { class: 'ui-toast-summary' }, 'Error!'), h('div', { class: 'ui-toast-detail' }, error)));
+          root.append(toast);
+          setTimeout(() => toast.remove(), 3000);
+          return;
+        }
         const dateCells = dates.map((date) => {
           const cell = h('div', { class: 'pre-avl', 'data-rec': `${rec}.date[${date}]` }, h('div', null, h('strong', null, date)));
           cell.addEventListener('click', () => {
@@ -386,7 +422,7 @@
       cells.append(...train.classes.map((code) => {
         const cell = h('div', { class: 'pre-avl', 'data-rec': `${rec}.class[${code}]` },
           h('div', null, h('strong', null, className(code))), h('div', null, 'Refresh'));
-        cell.addEventListener('click', () => later(() => enquire(code)));
+        cell.addEventListener('click', () => ask(code));
         return cell;
       }));
       book.addEventListener('click', () => {
@@ -566,7 +602,7 @@
   if (cfg.clock) setClock(cfg.clock);
   tick();
   setInterval(tick, 250);
-  root.append(header, main);
+  root.append(header, main, loading);
   if (cfg.languagePopup) root.append(languageDialog());
   showHome();
 

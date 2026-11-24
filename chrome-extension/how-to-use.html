@@ -288,8 +288,10 @@
                 <li><strong>Sign-in.</strong> The extension fills in your username and password. If there is a
                     captcha, a note at the top of the page says <code>Type the captcha and press Enter.</code>
                     and the cursor is in the box. If IRCTC then shows a new captcha, the note says
-                    <code>A new captcha is shown. Type it and press Enter.</code> With no captcha, the extension
-                    signs in by itself.</li>
+                    <code>A new captcha is shown. Type it and press Enter.</code> If the form still shows no
+                    captcha a second or two after it opens, the extension presses Sign In by itself. A
+                    captcha that appears just after that is still yours to type; Sign In may then already
+                    have been pressed once without it.</li>
                 <li><strong>Search.</strong> It fills in the journey. For the Tatkal quotas it presses Search
                     when the clock in the IRCTC page header reaches <strong>Booking Start Time</strong>. Until
                     then the filled-in form just sits there; that is expected. Do not reload the tab
@@ -297,7 +299,10 @@
                     at once, unless <strong>Opening Day Booking</strong> is on.</li>
                 <li><strong>Train and passengers.</strong> It opens your class on your train, asks for
                     availability again every <strong>Refresh Time (ms)</strong> until IRCTC enables Book Now,
-                    and presses it. If IRCTC then asks you to confirm the station, answer it yourself: the
+                    and presses it. If IRCTC shows
+                    <code>We are experiencing High Load – Please retry.</code> instead, it asks again at the
+                    same interval (at least a second apart), but only once the page has stopped loading. If
+                    IRCTC then asks you to confirm the station, answer it yourself: the
                     extension accepts it only when
                     <strong>Auto-Accept 'From/To Station' Confirmation Dialogs</strong> is ticked, and it
                     looks for the question once. It then fills in the passenger page and presses
@@ -386,6 +391,10 @@
                     <strong>Auto Booking</strong> off.</li>
                 <li><code>Train 12345 was not found in the search results. ...</code> Pick a train and class and
                     press Book Now yourself, or correct the details, save and reload the tab.</li>
+                <li><code>IRCTC says: ... The extension will not ask again by itself. ...</code> IRCTC refused
+                    the availability request for a reason that asking again cannot fix. Click OK and read its
+                    message. When the reason has gone, click the class on your train once; the extension then
+                    picks the date and presses Book Now as usual.</li>
                 <li><code>Class 3A was not found on train 12345. ...</code> Click another class on that train.
                     The extension carries on.</li>
                 <li><code>Passenger "Asha Example" was not found in your IRCTC master list. ...</code> Fill in
@@ -409,6 +418,10 @@
                 <li><strong>IRCTC did not open at the wake-up time.</strong> Chrome must be running then. To
                     start the run, click <strong>Book Ticket on IRCTC</strong> in the options page's top
                     bar.</li>
+                <li><strong>The class is not asked for again after <code>High Load</code>.</strong> The
+                    extension asks again only while that message is showing for your class, and only once it
+                    has seen IRCTC's loading sign come and go. Otherwise click the class yourself; it carries
+                    on from there.</li>
                 <li><strong>A step does not move on.</strong> The extension waits, with no time limit, for the
                     next page it knows. Do the step by hand and it carries on from there.</li>
                 <li><strong>See what it is doing.</strong> Switch on <strong>Debug Mode</strong>, reload the
