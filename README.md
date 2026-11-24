@@ -88,7 +88,7 @@ A new install often shows a yellow line `Draft wake-up time has passed: ...` at 
    <img src="docs/images/schedule-timing.png" alt="The Schedule & Timing card: Schedule Date 02/12/2026 with a Today button, Booking Start Time 09:59:53, Refresh Time (ms) 5000 and Login Minutes Before 2" width="400">
 
 5. **Passenger Details.** The **Use IRCTC Master Data** box, not the tab you are viewing, decides which list is used. Leave it unticked unless you have saved travellers in your IRCTC account (its master list).
-   - Unticked: on **Passenger List**, click **Add Passenger**, fill in **Name** (16 characters at most), **Age** (click the empty cell), **Gender**, **Preference** and **Food Choice**, click the disk icon, then tick the row: saving does not tick it.
+   - Unticked: on **Passenger List**, click **Add Passenger**, fill in **Name** (16 characters at most), **Age**, **Gender**, **Preference** and **Food Choice**, click the disk icon, then tick the row: saving does not tick it.
    - Ticked: on **Passenger Master Data**, click **Add Passenger**, type the first name exactly as saved in your IRCTC master list, click the disk icon and tick the row.
 
    Only ticked rows are used: up to 4 for the Tatkal quotas, 6 for General. For a child under five without a berth, switch on **Have Infant Without Berth?** and click **Add Infant Without Berth**.
