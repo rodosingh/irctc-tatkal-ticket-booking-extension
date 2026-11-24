@@ -82,7 +82,7 @@ E2E_LOG=1 npm run test:e2e             # also print what the stand-in recorded
 Exit code 0: all scenarios passed. 1: a scenario failed. 2: could not run:
 no `dist/`, a `dist/` older than the sources it is built from, or isolation
 not verified. A failing scenario prints the stand-in's record, the dialogs
-seen and the last lines the extension logged. A full run takes four to five
+seen and the last lines the extension logged. A full run takes about five
 minutes; nearly all of it is the extension's own fixed waits.
 
 ## Files

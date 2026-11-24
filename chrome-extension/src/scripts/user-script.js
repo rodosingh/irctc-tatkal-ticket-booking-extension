@@ -36,8 +36,9 @@ const STORAGE_KEY = 'tatkalTicketBookingFormData';
 
 // How long a page gets to render its captcha before it is treated as captcha-less.
 const CAPTCHA_WAIT_TIME = 3000;
-// The login form gets this long, counted from when it opens, before Sign In is
-// pressed without a captcha. One that is drawn later is still picked up.
+// The login form gets this long, counted from when the extension first sees
+// it, before Sign In is pressed without a captcha. One that is drawn later is
+// still picked up.
 const LOGIN_CAPTCHA_WAIT_TIME = 1000;
 // The note shown while the person types a captcha into the page.
 const CAPTCHA_NOTE_ID = 'tatkal-captcha-note';
@@ -774,9 +775,9 @@ async function login() {
   if(username && password){
     // IRCTC no longer serves a captcha on every login. Wait briefly for a
     // usable one and sign in directly when the form does not have it (#94).
-    // The wait is short and counts from when the form opened, so that filling
-    // in the two fields is not waited for twice. With captcha reading on, the
-    // wait is as it always was.
+    // The wait is short and counts from when the form was first seen, so that
+    // filling in the two fields is not waited for twice. With captcha reading
+    // on, the wait is as it always was.
     const getImage = () => document.querySelector(LOGIN_CAPTCHA_IMAGE);
     const getInput = () => loginModal.querySelector(LOGIN_CAPTCHA_INPUT);
     const captcha = await waitForUsableCaptcha(getImage, getInput, autoSolveCaptcha
