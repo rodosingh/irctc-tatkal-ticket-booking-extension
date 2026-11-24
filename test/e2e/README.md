@@ -288,7 +288,8 @@ Branches of the extension that no scenario takes:
   (the pop-up for it), its class not offered, and a first date cell that is
   not the journey date.
 - PREMIUM TATKAL, and GENERAL on its opening day.
-- An enquiry's reason shown only in the toast, and the `Client IP` message.
+- An enquiry's reason shown only in the toast, the `Client IP` message, and
+  the train list drawn again while a class is open.
 - A login captcha that the form draws by itself a moment after it opens. Only
   one drawn after a refused sign-in is covered.
 - An empty user id or password, and a mobile number that is not ten digits.

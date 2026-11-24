@@ -51,6 +51,10 @@ const MASTER_PASSENGER_WAIT_TIME = 20000;
 const TRAIN_LIST_WAIT_TIME = 30000;
 // Once rows are showing, how long the wanted train gets to appear among them.
 const TRAIN_RESULTS_WAIT_TIME = 5000;
+// A refused availability enquiry is asked again only once IRCTC's loading
+// overlay has been gone this long, and never sooner than this after the last one.
+const LOADING_QUIET_TIME = 500;
+const RETRY_MIN_INTERVAL = 1000;
 
 const defaultSettings = {
   automationStatus: false,
@@ -1072,12 +1076,33 @@ async function refreshTrain() {
     Logger.error('An error occurred while refreshing the train:', error);
   }
 }
-// Text of the error IRCTC shows when an availability request fails, if any.
+// The reason IRCTC shows when an availability request fails: in the train's
+// own panel, where the dates would be, and in a toast that goes by itself.
 function findAvailabilityError(rootElement) {
-  const shown = Array.from(document.querySelectorAll(AVAILABILITY_ERROR)).find((element) =>
-    isElementVisible(element) && element.textContent.trim() &&
-    (rootElement.contains(element) || element.closest('p-toast')));
-  return shown ? shown.textContent.trim().replace(/\s+/g, ' ') : '';
+  const shown = Array.from(document.querySelectorAll(AVAILABILITY_ERROR))
+    .filter((element) => isElementVisible(element) && element.textContent.trim());
+  const textOf = (element) => (element ? element.textContent.trim().replace(/\s+/g, ' ') : '');
+  return {
+    inPanel: textOf(shown.find((element) => rootElement.contains(element))),
+    inToast: textOf(shown.find((element) => element.closest('p-toast'))),
+  };
+}
+// When IRCTC's loading overlay was last seen on this page; 0 = never. Until it
+// has been seen, LOADING_OVERLAY cannot be trusted to say that nothing is awaited.
+let loadingSeenAt = 0;
+// Waits like delay(), looking for the overlay meanwhile: a single look every
+// refresh interval would miss a quick answer and could fall into a gap.
+async function delayWatchingLoading(ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    try {
+      if (isElementVisible(document.querySelector(LOADING_OVERLAY))) loadingSeenAt = Date.now();
+    } catch (error) {
+      // An override that is not a selector: the overlay is never seen
+    }
+    if (Date.now() >= end) return;
+    await delay(Math.min(100, end - Date.now()));
+  }
 }
 // Asking again helps with a busy server. It cannot help with a wrong date or
 // quota, and it makes things worse while the IP is blocked ("Client IP").
@@ -1156,6 +1181,8 @@ async function bookTicket() {
   observer.observe(rootElement, { childList: true, subtree: true });
   
   const classSelected = await scrollToFoundTrainAndSelectClass();
+  let askedAt = Date.now(); // when availability was last asked for
+  let reasonSaid = ''; // the refusal the person has already been told about
 
   // No class was clicked, so no availability will arrive by itself. Say so,
   // and keep watching: if the user clicks a class on this train, the loop
@@ -1164,7 +1191,7 @@ async function bookTicket() {
     alert(`Class ${accommodationClass} was not found on train ${trainNumber}. Click the class you want on this train to carry on.`);
   }
 
-  await delay(1000);
+  await delayWatchingLoading(1000);
 
   while (!isAvlEnquiryCompleted) {
     // The user may have picked the class and pressed Book Now themselves:
@@ -1184,6 +1211,7 @@ async function bookTicket() {
                 // Reset the counters
                 mutationCompletionCounter = 0;
                 await refreshTrain(); // Refresh the train
+                askedAt = Date.now();
             }
         } catch (error) {
             if (error === STOPPED) throw error;
@@ -1191,21 +1219,36 @@ async function bookTicket() {
             Logger.error("An error occurred:", error);
             // Optionally, you can choose to break the loop or handle the error differently
         }
-    } else if (!isElementVisible(document.querySelector(LOADING_OVERLAY))) {
-        // Nothing arrived and IRCTC is not waiting on a request, so the last
-        // enquiry failed ("We are experiencing High Load - Please retry."), which
-        // adds no availability rows. Ask again, as a person would press Refresh.
-        // Never while the loader is up, so a pending enquiry is not doubled.
-        const availabilityError = findAvailabilityError(rootElement);
-        if (availabilityError && !isWorthRetrying(availabilityError)) {
-          Logger.error('IRCTC rejected the availability request:', availabilityError);
-          alert(`IRCTC says:\n\n${availabilityError}\n\nAuto refresh has stopped. The automation carries on if you book a train yourself.`);
-          return;
+    } else {
+        // Nothing arrived. If IRCTC shows why for the class that is open ("We
+        // are experiencing High Load - Please retry.", which adds no
+        // availability rows), ask again, as a person would press Refresh.
+        // Never while the loader is up or has only just gone, so that a
+        // pending enquiry is not doubled: that signs people out. A reason that
+        // asking again cannot fix is said once and the class is left to the
+        // person. With no reason on the page, or once the list has been drawn
+        // again, nothing is clicked.
+        try {
+            const settled = document.contains(rootElement) && rootElement.querySelector(SELECTED_CLASS_TAB)
+              && loadingSeenAt && Date.now() - loadingSeenAt >= LOADING_QUIET_TIME;
+            const { inPanel, inToast } = settled ? findAvailabilityError(rootElement) : { inPanel: '', inToast: '' };
+            if (inPanel && !isWorthRetrying(inPanel)) {
+              if (inPanel !== reasonSaid) {
+                reasonSaid = inPanel;
+                Logger.error('IRCTC rejected the availability request:', inPanel);
+                alert(`IRCTC says:\n\n${inPanel}\n\nThe extension will not ask again by itself. Click the class yourself when you can: it carries on from there.`);
+              }
+            } else if (isWorthRetrying(inPanel || inToast) && Date.now() - askedAt >= Math.max(refreshTime, RETRY_MIN_INTERVAL)) {
+              Logger.warn('IRCTC refused the availability request. Asking again.', inPanel || inToast);
+              await refreshTrain();
+              askedAt = Date.now();
+            }
+        } catch (error) {
+            if (error === STOPPED) throw error;
+            Logger.error("An error occurred:", error);
         }
-        Logger.warn('No availability received. Refreshing the class again.', availabilityError);
-        await refreshTrain();
     }
-    await delay(refreshTime); // Adjust the delay as needed
+    await delayWatchingLoading(refreshTime); // Adjust the delay as needed
 }
 
   // Proceed with booking the ticket

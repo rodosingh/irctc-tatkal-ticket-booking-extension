@@ -713,13 +713,13 @@ module.exports = [
   },
 
   // The first two availability enquiries are answered with the site's High
-  // Load message, which adds no availability. Every enquiry takes 3.3 s with
+  // Load message, which adds no availability. Every enquiry takes 3 s with
   // the loading overlay up, and the extension looks every 2 s: after each
   // time it asks again, its next look falls while that answer is still
   // awaited, with the last refusal still on the page.
   {
     name: 'availability refused twice with High Load: asked again only once the page has stopped loading, then booked',
-    site: { availabilityErrors: [HIGH_LOAD, HIGH_LOAD], enquiryTime: 3300 },
+    site: { availabilityErrors: [HIGH_LOAD, HIGH_LOAD], enquiryTime: 3000 },
     settings: settings({ quotaType: 'GENERAL', refreshTime: 2000 }),
     async drive(t) {
       await signedIn(t);
@@ -737,37 +737,61 @@ module.exports = [
   },
 
   // The enquiry is refused for a reason that asking again cannot change. The
-  // extension says so once and leaves the train list to the person.
+  // extension says so once and leaves the class to the person. When they click
+  // it and availability comes, it picks the date and books as usual.
   {
-    name: 'availability refused for a reason asking again cannot fix: a pop-up says so, nothing is asked again, a train booked by hand is carried on from',
+    name: 'availability refused for a reason asking again cannot fix: one pop-up, nothing asked again, and the person\'s own click on the class is carried on from',
     site: { availabilityErrors: ['Date outside the booking period.'], enquiryTime: 500 },
     settings: settings({ quotaType: 'GENERAL', refreshTime: 1000 }),
     dialogs: [{
       type: 'alert',
       message: 'IRCTC says:\n\nDate outside the booking period.'
-        + '\n\nAuto refresh has stopped. The automation carries on if you book a train yourself.',
+        + '\n\nThe extension will not ask again by itself. Click the class yourself when you can: it carries on from there.',
     }],
     async drive(t) {
       await signedIn(t);
       await t.until('the pop-up about the refused enquiry', () => t.dialogs.length > 0, 45000);
-      await t.pause(3500); // three refresh intervals in which nothing more may be asked
-      t.same('one enquiry so far, and no click on the tab', [
+      await t.pause(3500); // three refresh intervals in which nothing more may be asked or said
+      t.same('one enquiry and one pop-up so far, and no click on the tab', [
         (await t.readLog()).filter((entry) => entry.type === 'enquiry').length,
+        t.dialogs.length,
         clicked(await t.readLog(), 'train[99123].tab['),
-      ], [1, []]);
-      for (const part of ['tab[3A]', 'date[Fri, 07 Mar]', 'book']) {
-        await t.page.locator(`[data-rec="train[99123].${part}"]`).click();
-      }
+      ], [1, 1, []]);
+      await t.page.locator('[data-rec="train[99123].tab[3A]"]').click();
       await t.until('the passenger form to be continued', (log) => of(log, 'submit', 'passengers').length > 0);
     },
     verify(t, log) {
       t.same('two enquiries, the second asked for by the person',
         [of(log, 'enquiry', 'train[99123]').map((entry) => entry.pending), pressed(log, 'train[99123].tab[3A]')],
         [[false, false], ['user']]);
-      t.same('Book Now pressed once, by the person', [submitted(log, 'book'), pressed(log, 'train[99123].book')],
-        [[{ train: '99123', travelClass: '3A', date: 'Fri, 07 Mar' }], ['user']]);
+      t.same('the date picked and Book Now pressed once, by the extension',
+        [submitted(log, 'book'), pressed(log, 'train[99123].date[Fri, 07 Mar]'), pressed(log, 'train[99123].book')],
+        [[{ train: '99123', travelClass: '3A', date: 'Fri, 07 Mar' }], ['script'], ['script']]);
       t.same('the passenger form is continued once, for the two selected passengers',
         submitted(log, 'passengers').map((form) => form.passengers.map((passenger) => passenger.name)), [['Asha Example', 'Ravi Example']]);
+    },
+  },
+
+  // The site refuses with High Load but never shows a loading overlay, so the
+  // extension cannot tell whether an answer is still awaited. It asks for
+  // nothing by itself; the person's own click is carried on from.
+  {
+    name: 'High Load on a page whose loading overlay is never seen: nothing is asked again, the person\'s click on the class is carried on from',
+    site: { availabilityErrors: [HIGH_LOAD] },
+    settings: settings({ quotaType: 'GENERAL', refreshTime: 1000 }),
+    async drive(t) {
+      await signedIn(t);
+      await t.until('the class to be clicked', (log) => of(log, 'click', 'train[99123].class[3A]').length > 0, 45000);
+      await t.pause(5000); // five refresh intervals with the refusal on the page
+      t.same('no click on the tab by the extension', clicked(await t.readLog(), 'train[99123].tab['), []);
+      await t.page.locator('[data-rec="train[99123].tab[3A]"]').click();
+      await t.until('Book Now to be pressed', (log) => of(log, 'submit', 'book').length > 0);
+    },
+    verify(t, log) {
+      t.same('the tab clicked once, by the person', pressed(log, 'train[99123].tab[3A]'), ['user']);
+      t.same('the date picked and Book Now pressed once, by the extension',
+        [submitted(log, 'book'), pressed(log, 'train[99123].book')],
+        [[{ train: '99123', travelClass: '3A', date: 'Fri, 07 Mar' }], ['script']]);
     },
   },
 
